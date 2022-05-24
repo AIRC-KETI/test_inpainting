@@ -293,3 +293,200 @@ class ImageOnlyDatasetVG(Dataset):
 
         H, W = self.image_size
         return {'images': image}
+
+
+class COCOPairDataset(Dataset):
+    def __init__(self, image_dir, fake_dir, instances_json=None, stuff_json=None,
+                 stuff_only=True, image_size=(299, 299), mask_size=16,
+                 max_samples=None, normalize_images=True,
+                 include_relationships=True, min_object_size=0.02,
+                 min_objects_per_image=3, max_objects_per_image=8, left_right_flip=False,
+                 include_other=False, instance_whitelist=None, stuff_whitelist=None):
+        super(Dataset, self).__init__()
+
+        self.image_dir = image_dir
+        self.fake_dir = fake_dir
+        self.mask_size = mask_size
+        self.max_samples = max_samples
+        self.max_objects_per_image = max_objects_per_image
+        self.normalize_images = normalize_images
+        self.include_relationships = include_relationships
+        self.left_right_flip = left_right_flip
+        self.set_image_size(image_size)
+        self.instances_json = instances_json
+
+        instances_data = None
+        if instances_json is not None and stuff_json != '':
+            with open(instances_json, 'r') as f:
+                instances_data = json.load(f)
+
+            stuff_data = None
+            if stuff_json is not None and stuff_json != '':
+                with open(stuff_json, 'r') as f:
+                    stuff_data = json.load(f)
+
+            if instances_data:
+                self.image_ids = []
+                self.image_id_to_filename = {}
+                self.image_id_to_size = {}
+                for image_data in instances_data['images']:
+                    image_id = image_data['id']
+                    filename = image_data['file_name']
+                    width = image_data['width']
+                    height = image_data['height']
+                    self.image_ids.append(image_id)
+                    self.image_id_to_filename[image_id] = filename
+                    self.image_id_to_size[image_id] = (width, height)
+
+                self.vocab = {
+                    'object_name_to_idx': {},
+                    'pred_name_to_idx': {},
+                }
+                object_idx_to_name = {}
+                all_instance_categories = []
+                for category_data in instances_data['categories']:
+                    category_id = category_data['id']
+                    category_name = category_data['name']
+                    all_instance_categories.append(category_name)
+                    object_idx_to_name[category_id] = category_name
+                    self.vocab['object_name_to_idx'][category_name] = category_id
+            all_stuff_categories = []
+            if stuff_data:
+                for category_data in stuff_data['categories']:
+                    category_name = category_data['name']
+                    category_id = category_data['id']
+                    all_stuff_categories.append(category_name)
+                    object_idx_to_name[category_id] = category_name
+                    self.vocab['object_name_to_idx'][category_name] = category_id
+
+            if instance_whitelist is None:
+                instance_whitelist = all_instance_categories
+            if stuff_whitelist is None:
+                stuff_whitelist = all_stuff_categories
+            category_whitelist = set(instance_whitelist) | set(stuff_whitelist)
+
+            # Add object data from instances
+            self.image_id_to_objects = defaultdict(list)
+            for object_data in instances_data['annotations']:
+                image_id = object_data['image_id']
+                _, _, w, h = object_data['bbox']
+                W, H = self.image_id_to_size[image_id]
+                box_area = (w * h) / (W * H)
+                # box_area = object_data['area'] / (W * H)
+                box_ok = box_area > min_object_size
+                object_name = object_idx_to_name[object_data['category_id']]
+                category_ok = object_name in category_whitelist
+                other_ok = object_name != 'other' or include_other
+                if box_ok and category_ok and other_ok and (object_data['iscrowd'] != 1):
+                    self.image_id_to_objects[image_id].append(object_data)
+
+            # Add object data from stuff
+            if stuff_data:
+                image_ids_with_stuff = set()
+                for object_data in stuff_data['annotations']:
+                    image_id = object_data['image_id']
+                    image_ids_with_stuff.add(image_id)
+                    _, _, w, h = object_data['bbox']
+                    W, H = self.image_id_to_size[image_id]
+                    box_area = (w * h) / (W * H)
+                    # box_area = object_data['area'] / (W * H)
+                    box_ok = box_area > min_object_size
+                    object_name = object_idx_to_name[object_data['category_id']]
+                    category_ok = object_name in category_whitelist
+                    other_ok = object_name != 'other' or include_other
+                    if box_ok and category_ok and other_ok and (object_data['iscrowd'] != 1):
+                        self.image_id_to_objects[image_id].append(object_data)
+
+                if stuff_only:
+                    new_image_ids = []
+                    for image_id in self.image_ids:
+                        if image_id in image_ids_with_stuff:
+                            new_image_ids.append(image_id)
+                    self.image_ids = new_image_ids
+
+                    all_image_ids = set(self.image_id_to_filename.keys())
+                    image_ids_to_remove = all_image_ids - image_ids_with_stuff
+                    for image_id in image_ids_to_remove:
+                        self.image_id_to_filename.pop(image_id, None)
+                        self.image_id_to_size.pop(image_id, None)
+                        self.image_id_to_objects.pop(image_id, None)
+
+            # COCO category labels start at 1, so use 0 for __image__
+            self.vocab['object_name_to_idx']['__image__'] = 0
+
+            # Build object_idx_to_name
+            name_to_idx = self.vocab['object_name_to_idx']
+            assert len(name_to_idx) == len(set(name_to_idx.values()))
+            max_object_idx = max(name_to_idx.values())
+            idx_to_name = ['NONE'] * (1 + max_object_idx)
+            for name, idx in self.vocab['object_name_to_idx'].items():
+                idx_to_name[idx] = name
+            self.vocab['object_idx_to_name'] = idx_to_name
+
+            # Prune images that have too few or too many objects
+            new_image_ids = []
+            total_objs = 0
+            for image_id in self.image_ids:
+                num_objs = len(self.image_id_to_objects[image_id])
+                total_objs += num_objs
+                if min_objects_per_image <= num_objs <= max_objects_per_image:
+                    new_image_ids.append(image_id)
+            self.image_ids = new_image_ids
+
+            self.vocab['pred_idx_to_name'] = [
+                '__in_image__',
+                'left of',
+                'right of',
+                'above',
+                'below',
+                'inside',
+                'surrounding',
+            ]
+            self.vocab['pred_name_to_idx'] = {}
+            for idx, name in enumerate(self.vocab['pred_idx_to_name']):
+                self.vocab['pred_name_to_idx'][name] = idx
+            self.fake_id_to_filename = glob.glob(fake_dir+'/*')
+            self.fake_ids = glob.glob(fake_dir+'/*')
+        else:
+            self.image_id_to_filename = glob.glob(image_dir+'/*')
+            self.image_ids = glob.glob(image_dir+'/*')
+            self.fake_id_to_filename = glob.glob(fake_dir+'/*')
+            self.fake_ids = glob.glob(fake_dir+'/*')
+
+    def set_image_size(self, image_size):
+        print('called set_image_size', image_size)
+        transform = [Resize(image_size), T.ToTensor()]
+        self.transform = T.Compose(transform)
+        self.image_size = image_size
+    
+    def __len__(self):
+        if self.max_samples is None:
+            if self.left_right_flip:
+                return min(len(self.image_ids)*2, len(self.fake_ids))
+            return min(len(self.image_ids), len(self.fake_ids))
+        return [len(self.image_ids), self.max_samples, len(self.fake_ids)].sort()[0]
+    
+    def __getitem__(self, index):    
+        flip = False
+        f_index = index
+        if index >= len(self.image_ids):
+            index = index - len(self.image_ids)
+            flip = True
+        image_id = self.image_ids[index]
+        if self.instances_json is not None:
+            filename = self.image_id_to_filename[image_id]
+            image_path = os.path.join(self.image_dir, filename)
+            fake_path = self.fake_id_to_filename[f_index]
+        if self.instances_json is None:
+            image_path = self.image_id_to_filename[index]
+            fake_path = self.fake_id_to_filename[f_index]
+        with open(image_path, 'rb') as r:
+            with PIL.Image.open(r) as image:
+                if flip:
+                    image = PIL.ImageOps.mirror(image)
+                WW, HH = image.size
+                image = self.transform(image.convert('RGB'))
+        with open(fake_path, 'rb') as f:
+            with PIL.Image.open(f) as fake:
+                fake = self.transform(fake.convert('RGB'))
+        return {'images': image, 'fakes': fake}

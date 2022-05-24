@@ -23,6 +23,7 @@ please see INSTALL.md .
 - [X] VG validation with ours
 - [ ] validations with other methods
 - [ ] Valdiations with other metrics
+- [ ] Link for download test datasets
 
 ## Data Preparation
 Download COCO dataset to datasets/coco
@@ -34,23 +35,46 @@ Download VG dataset to datasets/vg
 bash scripts/download_vg.sh
 python scripts/preprocess_vg.py
 ```
-## Test
+## Model List
+- [ ] LostGAN
+- [ ] CAL2IM
+- [ ] TSA2IM
+- [ ] CIAFILL
+- [ ] Hyein et al.
+
+## Test Model
 
 ```bash
 python test_model.py --dataset [DATASET] --out_path [OUT_DIR] --model_path [MODEL_DIR]
 ```
+
+## Test Samples
+Note that IS and FID recommend generating more than 50,000 samples [WGAN-GP, TTUR]
+```bash
+python test_samples.py --dataset [DATASET] --out_path [OUT_DIR] --model_path [MODEL_DIR]
+```
+
+## Test Datasets for Various Tasks
+Comming soon.
+<ul>
+<li>COCO</li>
+<ul><li>HVITA </li></ul>
+<ul><li>HVITA + Inpainting</li></ul>
+<li>VG</li>
+<ul><li>HVITA </li></ul>
+<ul><li>HVITA + Inpainting</li></ul>
+<li>Places2</li>
+<ul><li>Inpainting</li></ul>
+<li>CelebA</li>
+<ul><li>Inpainting</li></ul>
+</ul>
 
 ## Reference
 
 If you find this repo helpful, please consider citing:
 
 ```
-@inproceedings{he2021context,
-  title={Context-Aware Layout to Image Generation with Enhanced Object Appearance},
-  author={He, Sen and Liao, Wentong and Yang, Michael and Yang, Yongxin and Song, Yi-Zhe and Rosenhahn, Bodo and Xiang, Tao},
-  booktitle={CVPR},
-  year={2021}
-}
+
 ```
 
 ## Acknowledgements

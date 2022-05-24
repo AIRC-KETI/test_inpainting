@@ -210,16 +210,22 @@ def compute_transformation_matrix(bbox):
     return transformation_matrix
 
 
-def bbox2_mask(bbox, image):
+def bbox2_mask(bbox, image, is_train=True):
     # bbox = [B,4], [x0, y0, x1, y1]
     # print(bbox)
     img_H, img_W = image.size(2), image.size(3)
     # print(bbox.shape)
-    '''
-    for i in range(image.size(0)):
-        if bbox[i,:,2] * bbox[i,:,3] >= 0.4:
-            bbox[i,:,:] = torch.tensor((0.25, 0.25, 0.5, 0.5))
-    '''
+    if is_train:
+        for i in range(image.size(0)):
+            rand_pos = 0.5 * torch.rand(1)
+            rand_width = torch.rand(1)
+            rand_height = 1.-rand_width
+            rand_ratio = 0.4 * torch.rand(2)
+            w = rand_width * (0.8 + rand_ratio[0])
+            h = rand_height * (0.8 + rand_ratio[1])
+            if (bbox[i,:,2] * bbox[i,:,3]) >= 0.5 or (bbox[i, :, 0] < 0.):
+                bbox[i,:,:] = torch.tensor((0., 0., w, h)) + rand_pos
+
     x1, y1, x2, y2 = bbox[:,:,0], bbox[:,:,1], bbox[:,:,2]+bbox[:,:,0], bbox[:,:,3]+bbox[:,:,1]  # [B, 1]
     h_linspace = torch.unsqueeze(torch.linspace(0, img_H-1, steps=img_H), 0) #  [1, H]
     w_linspace = torch.unsqueeze(torch.linspace(0, img_W-1, steps=img_W), 0)  # [1, W]

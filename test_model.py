@@ -37,11 +37,11 @@ def get_dataset(dataset, my_path, img_size):
         data = CocoSceneGraphDataset(image_dir=my_path+'./datasets/coco/val2017/',
                                      instances_json=my_path+'./datasets/coco/annotations/instances_val2017.json',
                                      stuff_json=my_path+'./datasets/coco/annotations/stuff_val2017.json',
-                                     stuff_only=True, image_size=(img_size, img_size), left_right_flip=True)
+                                     stuff_only=True, image_size=(img_size, img_size), left_right_flip=False)
     elif dataset == 'vg':
         data = VgSceneGraphDataset(vocab_json=my_path+'./datasets/vg/vocab.json', h5_path=my_path+'./datasets/vg/test.h5',
                                    image_dir=my_path+'./datasets/vg/images/',
-                                   image_size=(img_size, img_size), max_objects=7, left_right_flip=True)
+                                   image_size=(img_size, img_size), max_objects=7, left_right_flip=False)
     return data
 
 
@@ -112,6 +112,10 @@ def main(args):
         os.makedirs(os.path.join(args.out_path, 'model/'))
     if not os.path.exists(os.path.join(args.out_path, 'samples/')):
         os.makedirs(os.path.join(args.out_path, 'samples/'))
+    if not os.path.exists(os.path.join(args.out_path, 'masks/')):
+        os.makedirs(os.path.join(args.out_path, 'masks/'))
+    if not os.path.exists(os.path.join(args.out_path, 'masked_images/')):
+        os.makedirs(os.path.join(args.out_path, 'masked_images/'))
     if not os.path.exists(os.path.join(args.out_path, 'grid_samples/')):
         os.makedirs(os.path.join(args.out_path, 'grid_samples/'))
     writer = SummaryWriter(os.path.join(args.out_path, 'log'))
@@ -143,10 +147,15 @@ def main(args):
                 z = torch.randn(real_images.size(0), 3, num_obj, z_dim).to(device)
                 fake_images = netG(z, bbox, y=label.squeeze(dim=-1), triples=triples, masked_images=con_masked_images)
                 fake_images = fake_images * mask + masked_images * (1.-mask)
-
-                for i in range(real_images.size(0)):
-                    torchvision.utils.save_image((fake_images[i] - torch.min(fake_images[i]))/(torch.max(fake_images[i]) - torch.min(fake_images[i])+1.e-6), "{}/samples/{}_fake_{:06d}_{:06d}_{:06d}.jpg".format(args.out_path, args.dataset, epoch, idx, i))
+                # torchvision.utils.save_image(real_images, "{}/piq/real/{}_real_{:06d}.jpg".format(args.out_path, args.dataset, idx))
+                # torchvision.utils.save_image(fake_images, "{}/piq/fake/{}_fake_{:06d}.jpg".format(args.out_path, args.dataset, idx))
                 
+                for i in range(real_images.size(0)):
+                    # torchvision.utils.save_image((fake_images[i] - torch.min(fake_images[i]))/(torch.max(fake_images[i]) - torch.min(fake_images[i])+1.e-6), "{}/samples/{}_fake_{:06d}_{:06d}_{:06d}.jpg".format(args.out_path, args.dataset, epoch, idx, i))
+                    torchvision.utils.save_image((masked_images[i]+1.)/2., "{}/masked_images/{}_fake_{:06d}_{:06d}_{:06d}.jpg".format(args.out_path, args.dataset, epoch, idx, i), value_range=(0., 1.))
+                    torchvision.utils.save_image(mask[i], "{}/masks/{}_fake_{:06d}_{:06d}_{:06d}.jpg".format(args.out_path, args.dataset, epoch, idx, i), value_range=(0., 1.))
+                    torchvision.utils.save_image((fake_images[i]+1.)/2., "{}/samples/{}_fake_{:06d}_{:06d}_{:06d}.jpg".format(args.out_path, args.dataset, epoch, idx, i), value_range=(0., 1.))
+
                 real_images = (real_images + 1.)/2.
                 fake_images = (fake_images + 1.)/2.
 
@@ -155,7 +164,7 @@ def main(args):
                 test_l2 = test_l2 + torch.mean(torch.square(real_images-fake_images))
                 test_ssim = test_ssim + ssim(real_images, fake_images)
                 test_psnr = test_psnr + psnr(real_images, fake_images)
-                test_lpips = test_lpips + lpips(real_images, fake_images)
+                # test_lpips = test_lpips + lpips(real_images, fake_images)
                 count = count + real_images.size(0)
                 batch_count = batch_count + 1
 
@@ -169,11 +178,11 @@ def main(args):
     if args.dataset == "coco":
         real_dataset = ImageOnlyDataset(my_path + './datasets/coco/val2017/',
                                     instances_json=my_path+'./datasets/coco/annotations/instances_val2017.json',
-                                    stuff_json=my_path+'./datasets/coco/annotations/stuff_val2017.json', image_size=(128, 128), left_right_flip=True)
+                                    stuff_json=my_path+'./datasets/coco/annotations/stuff_val2017.json', image_size=(128, 128), left_right_flip=False)
     elif args.dataset == 'vg':
         real_dataset = ImageOnlyDatasetVG(vocab_json=my_path+'./datasets/vg/vocab.json', h5_path=my_path+'./datasets/vg/test.h5',
                                    image_dir=my_path+'./datasets/vg/images/',
-                                   image_size=(img_size, img_size), max_objects=7, left_right_flip=True)
+                                   image_size=(img_size, img_size), max_objects=7, left_right_flip=False)
     
     fake_dataset = ImageOnlyDataset(fake_dir, image_size=(299, 299), left_right_flip=False)
     
@@ -235,7 +244,7 @@ if __name__ == "__main__":
                         help='mini-batch size of training data. Default: 16')
     parser.add_argument('--start_epoch', type=int, default=0,
                         help='number of total training epoch')
-    parser.add_argument('--total_epoch', type=int, default=1,
+    parser.add_argument('--total_epoch', type=int, default=18,
                         help='number of total training epoch')
     parser.add_argument('--g_lr', type=float, default=0.0001,
                         help='learning rate for generator')
