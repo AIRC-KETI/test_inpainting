@@ -70,11 +70,11 @@ def main(args):
         pair_dataset = COCOPairDataset(my_path + './datasets/coco/val2017/',
                                     fake_dir=my_path + './test_tsa_v3/coco/128/samples',
                                     instances_json=my_path+'./datasets/coco/annotations/instances_val2017.json',
-                                    stuff_json=my_path+'./datasets/coco/annotations/stuff_val2017.json', image_size=(128, 128), left_right_flip=True)
+                                    stuff_json=my_path+'./datasets/coco/annotations/stuff_val2017.json', image_size=(128, 128), left_right_flip=False)
     elif args.dataset == 'vg':
         pair_dataset = ImageOnlyDatasetVG(vocab_json=my_path+'./datasets/vg/vocab.json', h5_path=my_path+'./datasets/vg/test.h5',
                                    image_dir=my_path+'./datasets/vg/images/',
-                                   image_size=(img_size, img_size), max_objects=7, left_right_flip=True)
+                                   image_size=(img_size, img_size), max_objects=7, left_right_flip=False)
 
     dataloader = torch.utils.data.DataLoader(
         pair_dataset, batch_size=args.batch_size,

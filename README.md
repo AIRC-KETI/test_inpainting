@@ -1,5 +1,5 @@
 # Test model
-This repository includes the implementation for test.
+This repository includes the implementation for inpainting test.
 
 In this test, the following metrics are evaluated.
 
@@ -16,7 +16,7 @@ In this test, the following metrics are evaluated.
 This repo is not yet complete.
 
 ## Requirements
-please see INSTALL.md .
+please see [INSTALL.md](INSTALL.md)
 
 ## TODO
 - [X] COCO validation with ours
@@ -50,6 +50,9 @@ python test_model.py --dataset [DATASET] --out_path [OUT_DIR] --model_path [MODE
 
 ## Test Samples
 Note that IS and FID recommend generating more than 50,000 samples [WGAN-GP, TTUR]
+
+Note: The data type is converted from float to uint8 when saving the image. For accurate measurement, use the test model whenever possible.
+
 ```bash
 python test_samples.py --dataset [DATASET] --out_path [OUT_DIR] --model_path [MODEL_DIR]
 ```
