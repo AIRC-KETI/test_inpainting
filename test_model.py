@@ -32,15 +32,15 @@ import glob
 import re
 import piq
 
-def get_dataset(dataset, img_size):
+def get_dataset(dataset, my_path, img_size):
     if dataset == "coco":
-        data = CocoSceneGraphDataset(image_dir='./datasets/coco/val2017/',
-                                     instances_json='./datasets/coco/annotations/instances_val2017.json',
-                                     stuff_json='./datasets/coco/annotations/stuff_val2017.json',
+        data = CocoSceneGraphDataset(image_dir=my_path+'./datasets/coco/val2017/',
+                                     instances_json=my_path+'./datasets/coco/annotations/instances_val2017.json',
+                                     stuff_json=my_path+'./datasets/coco/annotations/stuff_val2017.json',
                                      stuff_only=True, image_size=(img_size, img_size), left_right_flip=True)
     elif dataset == 'vg':
-        data = VgSceneGraphDataset(vocab_json='D:/layout2img_ours/datasets/vg/vocab.json', h5_path='D:/layout2img_ours/datasets/vg/test.h5',
-                                   image_dir='D:/layout2img_ours/datasets/vg/images/',
+        data = VgSceneGraphDataset(vocab_json=my_path+'./datasets/vg/vocab.json', h5_path=my_path+'./datasets/vg/test.h5',
+                                   image_dir=my_path+'./datasets/vg/images/',
                                    image_size=(img_size, img_size), max_objects=7, left_right_flip=True)
     return data
 
@@ -49,10 +49,6 @@ def main(args):
     # parameters
     img_size = args.img_size
     z_dim = 128
-    lamb_obj = 1.0
-    lamb_app = 1.0
-    lamb_img = 0.1
-    # pred_classes = 7 if args.dataset == 'coco' else 46
     pred_classes = 7 if args.dataset == 'coco' else 7
     num_classes = 184 if args.dataset == 'coco' else 179
     num_obj = 8 if args.dataset == 'coco' else 8
@@ -69,7 +65,8 @@ def main(args):
         parallel = False
 
     # data loader
-    train_data = get_dataset(args.dataset, img_size)
+    my_path = 'D:/layout2img_ours'
+    train_data = get_dataset(args.dataset, my_path, img_size)
 
     dataloader = torch.utils.data.DataLoader(
         train_data, batch_size=args.batch_size,
@@ -108,8 +105,6 @@ def main(args):
             else:
                 gen_parameters += [{'params': [value], 'lr': g_lr}]
 
-    g_optimizer = torch.optim.Adam(gen_parameters, betas=(0, 0.999))
-
     # make dirs
     if not os.path.exists(args.out_path):
         os.makedirs(args.out_path)
@@ -124,9 +119,9 @@ def main(args):
     logger = setup_logger("lostGAN", args.out_path, 0)
     logger.info(netG)
 
-    test_l1, test_l2, test_ssim, test_psnr, test_lpips, test_is, test_FID = 0, 0, 0, 0, 0, 0, 0
+    test_l1, test_l2, test_ssim, test_psnr, test_lpips, test_is, test_fid = 0, 0, 0, 0, 0, 0, 0
     inception_v3 = Inceptionv3OnlyFeature().to(device)
-    ssim, psnr, lpips, isc, fid = piq.ssim, piq.psnr, piq.LPIPS(), piq.IS(), piq.FID()
+    ssim, psnr, lpips = piq.ssim, piq.psnr, piq.LPIPS()
     count = 0
     batch_count = 0
     test_lpips = 0.15149037539958954
@@ -149,15 +144,9 @@ def main(args):
                 fake_images = netG(z, bbox, y=label.squeeze(dim=-1), triples=triples, masked_images=con_masked_images)
                 fake_images = fake_images * mask + masked_images * (1.-mask)
 
-                # grid_real_images = torchvision.utils.make_grid(real_images, padding=0, normalize=True)
-                # grid_fake_images = torchvision.utils.make_grid(fake_images, padding=0, normalize=True)
-
                 for i in range(real_images.size(0)):
                     torchvision.utils.save_image((fake_images[i] - torch.min(fake_images[i]))/(torch.max(fake_images[i]) - torch.min(fake_images[i])+1.e-6), "{}/samples/{}_fake_{:06d}_{:06d}_{:06d}.jpg".format(args.out_path, args.dataset, epoch, idx, i))
                 
-                # torchvision.utils.save_image(grid_real_images, "{}/grid_samples/{}_real_{:06d}.jpg".format(args.out_path, args.dataset, idx))
-                # torchvision.utils.save_image(grid_fake_images, "{}/grid_samples/{}_fake_{:06d}.jpg".format(args.out_path, args.dataset, idx))
-                # print(torch.min(real_images), torch.min(fake_images))
                 real_images = (real_images + 1.)/2.
                 fake_images = (fake_images + 1.)/2.
 
@@ -177,14 +166,13 @@ def main(args):
     print('[*] lpips: {}'.format(test_lpips/(batch_count+1.e-6)))
     
     fake_dir = '{}/samples/'.format(args.out_path)
-    
     if args.dataset == "coco":
-        real_dataset = ImageOnlyDataset('./datasets/coco/val2017/',
-                                    instances_json='./datasets/coco/annotations/instances_val2017.json',
-                                    stuff_json='./datasets/coco/annotations/stuff_val2017.json', image_size=(128, 128), left_right_flip=True)
+        real_dataset = ImageOnlyDataset(my_path + './datasets/coco/val2017/',
+                                    instances_json=my_path+'./datasets/coco/annotations/instances_val2017.json',
+                                    stuff_json=my_path+'./datasets/coco/annotations/stuff_val2017.json', image_size=(128, 128), left_right_flip=True)
     elif args.dataset == 'vg':
-        real_dataset = ImageOnlyDatasetVG(vocab_json='D:/layout2img_ours/datasets/vg/vocab.json', h5_path='D:/layout2img_ours/datasets/vg/test.h5',
-                                   image_dir='D:/layout2img_ours/datasets/vg/images/',
+        real_dataset = ImageOnlyDatasetVG(vocab_json=my_path+'./datasets/vg/vocab.json', h5_path=my_path+'./datasets/vg/test.h5',
+                                   image_dir=my_path+'./datasets/vg/images/',
                                    image_size=(img_size, img_size), max_objects=7, left_right_flip=True)
     
     fake_dataset = ImageOnlyDataset(fake_dir, image_size=(299, 299), left_right_flip=False)
@@ -202,14 +190,13 @@ def main(args):
             images = data['images'].to(device)
             if idx == 0:
                 fake_feats, ins_feat = inception_v3(images)
-            # elif idx < int(5000/args.batch_size) + 1:
             else:
                 temp_fake_feats, temp_ins_feat = inception_v3(images)
                 fake_feats = torch.cat((fake_feats, temp_fake_feats), 0)
                 ins_feat = torch.cat((ins_feat, temp_ins_feat), 0)
     
     fake_feats = torch.squeeze(fake_feats)
-    test_is = bil.inception_score(ins_feat)
+    test_is = inception_score(ins_feat)
 
     with torch.no_grad():
         for idx, data in enumerate(tqdm(real_dataloader)):
@@ -225,11 +212,11 @@ def main(args):
     real_feats = torch.squeeze(real_feats)
     print(torch.var_mean(fake_feats, unbiased=False))  # [0.1105, 0.3413]
     print(torch.var_mean(real_feats, unbiased=False))  # [0.1045, 0.3143]
-    test_fid = bil.compute_metric(real_feats, fake_feats)
+    test_fid = compute_metric(real_feats, fake_feats)
 
     print('[*] is: {}'.format(test_is))
     print('[*] fid: {}'.format(test_fid))
-    
+
     f= open(args.out_path + "/quantitative_results.txt","w+")
     f.write('[*] l1: {} %\n'.format(100. * test_l1/(batch_count+1.e-6)))
     f.write('[*] l2: {} %\n'.format(100. * test_l2/(batch_count+1.e-6)))
@@ -257,8 +244,6 @@ if __name__ == "__main__":
     parser.add_argument('--model_path', type=str, default='./my_outputs/model/',
                         help='path to output files')
     parser.add_argument('--img_size', type=str, default=128,
-                        help='generated image size')
-    parser.add_argument('--writer_step', type=int, default=500,
                         help='generated image size')
     args = parser.parse_args()
     main(args)

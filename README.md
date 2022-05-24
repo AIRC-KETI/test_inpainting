@@ -1,16 +1,28 @@
 # Test model
 This repository includes the implementation for test.
 
+In this test, the following metrics are evaluated.
+
+- [X] L1
+- [X] L2
+- [X] SSIM
+- [X] PSNR
+- [X] LPIPS
+- [X] IS
+- [X] FID
+- [ ] SSL 1-2 metric
+- [ ] SSL 3 metric
+
 This repo is not completely.
 
 ## Requirements
 please see INSTALL.md .
 
 ## TODO
-- [X] instruction for coco validation with ours
-- [ ] instruction for vg validation with ours
-- [ ] instruction for coco validation with other methods
-- [ ] instruction for vg validation with other methods
+- [X] COCO validation with ours
+- [X] VG validation with ours
+- [ ] validations with other methods
+- [ ] Valdiations with other metrics
 
 ## Data Preparation
 Download COCO dataset to datasets/coco
