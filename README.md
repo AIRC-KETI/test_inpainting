@@ -22,7 +22,11 @@ Download VG dataset to datasets/vg
 bash scripts/download_vg.sh
 python scripts/preprocess_vg.py
 ```
+## Test
 
+```bash
+python test_model.py --dataset [DATASET] --out_path [OUT_DIR] --model_path [MODEL_DIR]
+```
 
 ## Reference
 
