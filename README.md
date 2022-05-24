@@ -3,17 +3,17 @@ This repository includes the implementation for test.
 
 In this test, the following metrics are evaluated.
 
-- [X] L1
-- [X] L2
-- [X] SSIM
-- [X] PSNR
-- [X] LPIPS
-- [X] IS
-- [X] FID
+*  L1
+*  L2
+*  SSIM
+*  PSNR
+*  LPIPS
+*  IS
+*  FID
 - [ ] SSL 1-2 metric
 - [ ] SSL 3 metric
 
-This repo is not completely.
+This repo is not yet complete.
 
 ## Requirements
 please see INSTALL.md .
