@@ -7,7 +7,7 @@ This repo is not completely.
 please see INSTALL.md .
 
 ## TODO
-- [v] instruction for coco validation with ours
+- [X] instruction for coco validation with ours
 - [ ] instruction for vg validation with ours
 - [ ] instruction for coco validation with other methods
 - [ ] instruction for vg validation with other methods
