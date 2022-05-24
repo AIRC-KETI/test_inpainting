@@ -196,8 +196,6 @@ def main(args):
     fake_dataloader = torch.utils.data.DataLoader(
         fake_dataset, batch_size=args.batch_size,
         drop_last=False, shuffle=False, num_workers=num_workers)
-    # real_feats = isc.compute_feats(real_dataloader)
-    # fake_feats = isc.compute_feats(fake_dataloader)
 
     with torch.no_grad():
         for idx, data in enumerate(tqdm(fake_dataloader)):
@@ -211,7 +209,7 @@ def main(args):
                 ins_feat = torch.cat((ins_feat, temp_ins_feat), 0)
     
     fake_feats = torch.squeeze(fake_feats)
-    test_is = inception_score(ins_feat)
+    test_is = bil.inception_score(ins_feat)
 
     with torch.no_grad():
         for idx, data in enumerate(tqdm(real_dataloader)):
@@ -225,41 +223,13 @@ def main(args):
                 real_feats_1000 = torch.cat((real_feats_1000, temp_real_feats_1000), 0)
 
     real_feats = torch.squeeze(real_feats)
-    # print(torch.var_mean(fake_feats, unbiased=False))  # [0.1103, 0.3411]
-    # print(torch.var_mean(real_feats, unbiased=False))  # [0.1045, 0.3143]
-    '''
-    ten_real_feats = real_feats
-    for i in range(9):
-        ten_real_feats = torch.cat((ten_real_feats, real_feats), 0)
-    '''
-    # real_feats = isc.compute_feats(real_dataloader)
-    # fake_feats = isc.compute_feats(fake_dataloader)
-    # real_feats, fake_feats = real_feats[:min(real_feats.size(0), fake_feats.size(0))], fake_feats[:min(real_feats.size(0), fake_feats.size(0))]  # false
     print(torch.var_mean(fake_feats, unbiased=False))  # [0.1105, 0.3413]
     print(torch.var_mean(real_feats, unbiased=False))  # [0.1045, 0.3143]
-    # ten_real_feats, fake_feats = ten_real_feats[:min(ten_real_feats.size(0), fake_feats.size(0))], fake_feats[:min(ten_real_feats.size(0), fake_feats.size(0))]  # false
-    test_fid = compute_metric(real_feats, fake_feats)
+    test_fid = bil.compute_metric(real_feats, fake_feats)
 
     print('[*] is: {}'.format(test_is))
     print('[*] fid: {}'.format(test_fid))
-    '''
-    if not os.path.exists(os.path.join(args.out_path, 'piq/')):
-            os.makedirs(os.path.join(args.out_path, 'piq/'))
-    if not os.path.exists(os.path.join(args.out_path, 'piq/', 'real/')):
-            os.makedirs(os.path.join(args.out_path, 'piq/', 'real/'))
-    if not os.path.exists(os.path.join(args.out_path, 'piq/', 'fake/')):
-            os.makedirs(os.path.join(args.out_path, 'piq/', 'fake/'))
-
-    for idx, data in enumerate(tqdm(real_dataloader)):
-        image = data['images']
-        torchvision.utils.save_image(image, "{}/piq/real/{}_real_{:06d}.jpg".format(args.out_path, args.dataset, idx))
-        # for i in range(image.size(0)):
-
-    for idx, data in enumerate(tqdm(fake_dataloader)):
-        image = data['images']
-        torchvision.utils.save_image(image, "{}/piq/fake/{}_fake_{:06d}.jpg".format(args.out_path, args.dataset, idx))
-        # for i in range(image.size(0)):
-    ''' 
+    
     f= open(args.out_path + "/quantitative_results.txt","w+")
     f.write('[*] l1: {} %\n'.format(100. * test_l1/(batch_count+1.e-6)))
     f.write('[*] l2: {} %\n'.format(100. * test_l2/(batch_count+1.e-6)))
