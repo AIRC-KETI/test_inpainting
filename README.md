@@ -49,9 +49,9 @@ python test_model.py --dataset [DATASET] --out_path [OUT_DIR] --model_path [MODE
 ```
 
 ## Test Samples
-Note that IS and FID recommend generating more than 50,000 samples [WGAN-GP, TTUR]
+Note 1: Measuring IS or FID is recommended by generating more than 50,000 samples [WGAN-GP, TTUR]
 
-Note: The data type is converted from float to uint8 when saving the image. For accurate measurement, use the test model whenever possible.
+Note 2: The data type is converted from float to uint8 when saving the image. For accurate measurement, use the test model whenever possible.
 
 ```bash
 python test_samples.py --dataset [DATASET] --out_path [OUT_DIR] --model_path [MODEL_DIR]
@@ -59,19 +59,16 @@ python test_samples.py --dataset [DATASET] --out_path [OUT_DIR] --model_path [MO
 
 ## Test Datasets for Various Tasks
 Comming soon.
-<ul>
-<li>COCO</li>
-<ul><li>HVITA </li></ul>
-<ul><li>HVITA + Inpainting</li></ul>
-<li>VG</li>
-<ul><li>HVITA </li></ul>
-<ul><li>HVITA + Inpainting</li></ul>
-<li>Places2</li>
-<ul><li>Inpainting</li></ul>
+<li>Task 1: Hallucinating Visual Instances with Total Absensia (HVITA)</li>
+<ul><li>COCO</li>
+<li>VG</li></ul>
+<li>Task 2: Inpainting</li>
+<ul><li>Places2</li>
 <li>CelebA</li>
-<ul><li>Inpainting</li></ul>
 </ul>
-
+<li>Task 3: HVITA+Inpainting</li>
+<ul><li> [COCO](/data) </li>
+<li> [VG](/data) </li></ul>
 ## Reference
 
 If you find this repo helpful, please consider citing:
