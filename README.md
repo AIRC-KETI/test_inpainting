@@ -16,7 +16,7 @@ In this test, the following metrics are evaluated.
 This repo is not yet complete.
 
 ## Requirements
-please see [INSTALL.md](INSTALL.md)
+please see [INSTALL.md](INSTALL.md).
 
 ## TODO
 - [X] COCO validation with ours
@@ -36,9 +36,9 @@ bash scripts/download_vg.sh
 python scripts/preprocess_vg.py
 ```
 ## Model List
+- [X] TSA2IM (Ours)
 - [ ] LostGAN
 - [ ] CAL2IM
-- [ ] TSA2IM
 - [ ] CIAFILL
 - [ ] Hyein et al.
 
@@ -69,8 +69,8 @@ Comming soon.
 <li>Task 3: HVITA+Inpainting</li>
 <ul><li> [COCO](/data) </li>
 <li> [VG](/data) </li></ul>
-## Reference
 
+## Reference
 If you find this repo helpful, please consider citing:
 
 ```
