@@ -79,7 +79,8 @@ Note 2: The result of the model should also be output in the form of a dict.
 | image_contents     | float     | [-1,1]                | [Height,Width, 3]  |inpaintied results                     |
 
 ```bash
-python test_model.py --dataset [DATASET] --out_path [OUT_DIR] --ckpt_path [CKPT_DIR] --model_name [MODEL_NAME]
+python test_model.py \
+--dataset [DATASET] --out_path [OUT_DIR] --ckpt_path [CKPT_DIR] --model_name [MODEL_NAME]
 ```
 
 ## Test Samples
@@ -88,7 +89,7 @@ Note 1: Measuring IS or FID is recommended by generating more than 50,000 sample
 Note 2: The data type is converted from float to uint8 when saving the image. For accurate measurement, use the [test_model.py](/test_model.py) whenever possible.
 
 ```bash
-python test_samples.py --dataset [DATASET] --out_path [OUT_DIR] --model_path [MODEL_DIR]
+python test_samples.py --dataset [DATASET] --out_path [OUT_DIR] --ckpt_path [CKPT_DIR]
 ```
 
 ## Test Datasets for Various Tasks
@@ -104,7 +105,8 @@ Comming soon.
 
 #### Task 3: HVITA+Inpainting
 
-* Download link: [COCO](https://drive.google.com/file/d/1qT4lydtSC7JEF_3rJemyj8NY1x8uDThq/view?usp=sharing) [VG]
+* Download link: [COCO](https://drive.google.com/file/d/1qT4lydtSC7JEF_3rJemyj8NY1x8uDThq/view?usp=sharing)
+* Download link: [VG](https://drive.google.com/file/d/1asCc5dBo7EhuzkMARbwa-LUyRlSP9DuZ/view?usp=sharing)
 
 
 ## Reference
