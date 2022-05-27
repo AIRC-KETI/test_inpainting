@@ -44,7 +44,15 @@ python scripts/preprocess_vg.py
 
 ## Test Model
 
-Note: Your own model should be in: 
+Run the test script:
+
+```bash
+python test_model.py \
+--dataset [DATASET] --out_path [OUT_DIR] --ckpt_path [CKPT_DIR] --model_name [MODEL_NAME]
+```
+#### Note for your own model
+
+1. Your own model should be in: 
 ```bash
 ${ROOT}
 ├── data
@@ -61,39 +69,35 @@ ${ROOT}
 └── test_samples.py
 ```
 
-### Input and Output type
-Note 1: test model should get two or more input with 'dict' type content
+2. test model should get two or more input with 'dict' type content
 
 | key                | type      | range                 | shape              | descrption                                    |
 |--------------------|-----------|-----------------------|--------------------|-----------------------------------------------|
-| image_contents     | float     | [-1,1]                | [Height,Width, 3]  | masked input (gray color)                     |
+| image_contents     | float     | [-1, 1]                | [Height,Width, 3]  | masked input (gray color)                     |
 | mask               | float,int | [0, 1]                | [Height, Width, 1] | mask(1 to mask in each pixel)                 |
 | label (optional)   | int       | [0, # of label index) | [# of objects]     | object index (defined in each dataset)        |
 | bbox (optional)    | float     | [0, 1]                | [# of objects, 4]  | bound box with (x, y, w, h) relative position |
 | triples (optional) | int       | [0,# of triples)      | [# of triples, 3]  | triples (index defined in each dataset)       |
 
-Note 2: The result of the model should also be output in the form of a dict.
+3. The result of the model should also be output in the form of a dict.
 
 | key                | type      | range                 | shape              | descrption                                    |
 |--------------------|-----------|-----------------------|--------------------|-----------------------------------------------|
 | image_contents     | float     | [-1,1]                | [Height,Width, 3]  |inpaintied results                     |
 
-```bash
-python test_model.py \
---dataset [DATASET] --out_path [OUT_DIR] --ckpt_path [CKPT_DIR] --model_name [MODEL_NAME]
-```
-
 ## Test Samples
-Note 1: Measuring IS or FID is recommended by generating more than 50,000 samples [WGAN-GP, TTUR]
 
-Note 2: The data type is converted from float to uint8 when saving the image. For accurate measurement, use the [test_model.py](/test_model.py) whenever possible.
+Run the test script:
 
 ```bash
 python test_samples.py --dataset [DATASET] --out_path [OUT_DIR] --ckpt_path [CKPT_DIR]
 ```
+Note 1: Measuring IS or FID is recommended by generating more than 50,000 samples [WGAN-GP, TTUR]
 
-## Test Datasets for Various Tasks
-Comming soon.
+Note 2: The data type is converted from float to uint8 when saving the image. For accurate measurement, use the [test_model.py](/test_model.py) whenever possible.
+
+
+## Test Datasets for Various Tasks (PIW)
 
 #### Task 1: Hallucinating Visual Instances with Total Absensia (HVITA)
 
@@ -105,8 +109,8 @@ Comming soon.
 
 #### Task 3: HVITA+Inpainting
 
-* Download link: [COCO](https://drive.google.com/file/d/1qT4lydtSC7JEF_3rJemyj8NY1x8uDThq/view?usp=sharing)
-* Download link: [VG](https://drive.google.com/file/d/1asCc5dBo7EhuzkMARbwa-LUyRlSP9DuZ/view?usp=sharing)
+* Download link: [COCO 128x128](https://drive.google.com/file/d/1qT4lydtSC7JEF_3rJemyj8NY1x8uDThq/view?usp=sharing)
+* Download link: [VG 128x128](https://drive.google.com/file/d/1asCc5dBo7EhuzkMARbwa-LUyRlSP9DuZ/view?usp=sharing)
 
 
 ## Reference
