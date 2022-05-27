@@ -79,7 +79,7 @@ Note 2: The result of the model should also be output in the form of a dict.
 | image_contents     | float     | [-1,1]                | [Height,Width, 3]  |inpaintied results                     |
 
 ```bash
-python test_model.py --dataset [DATASET] --out_path [OUT_DIR] --model_path [MODEL_DIR]
+python test_model.py --dataset [DATASET] --out_path [OUT_DIR] --ckpt_path [CKPT_DIR] --model_name [MODEL_NAME]
 ```
 
 ## Test Samples

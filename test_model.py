@@ -75,21 +75,19 @@ def main(args):
     device = torch.device('cuda')
     netG = eval(args.model_name)(num_classes=num_classes, pred_classes=pred_classes, output_dim=3).to(device)
     
-    if len(glob.glob(args.ckpt_path+'G*'))== 0:
-        netG.to(device)
-    else:
-        state_dict = torch.load(max(glob.iglob(args.ckpt_path+'G*'), key=os.path.getmtime))
-        print('[*] load_{}'.format(max(glob.iglob(args.ckpt_path+'G*'), key=os.path.getmtime)))
-        new_state_dict = OrderedDict()
-        for k, v in state_dict.items():
-            name = k[7:]  # remove `module.`nvidia
-            new_state_dict[name] = v
+    assert os.path.isfile(args.ckpt_path) is False
+    state_dict = torch.load(args.ckpt_path)
+    print('[*] load_{}'.format(args.ckpt_path))
+    new_state_dict = OrderedDict()
+    for k, v in state_dict.items():
+        name = k[7:]  # remove `module.`nvidia
+        new_state_dict[name] = v
 
-        model_dict = netG.state_dict()
-        pretrained_dict = {k: v for k, v in new_state_dict.items() if k in model_dict}
-        model_dict.update(pretrained_dict)
-        netG.load_state_dict(model_dict)
-        netG.to(device)
+    model_dict = netG.state_dict()
+    pretrained_dict = {k: v for k, v in new_state_dict.items() if k in model_dict}
+    model_dict.update(pretrained_dict)
+    netG.load_state_dict(model_dict)
+    netG.to(device)
     
     parallel = True
     if parallel:
@@ -263,5 +261,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
     main(args)
 
-# python test_model.py --dataset coco --data_path D:/layout2img_ours/datasets/ --out_path D:/layout2img_ours/test_tsa_v3/ --ckpt_path D:/layout2img_ours/tsa_v3/coco/128/model --model_name ResnetGenerator128_inpaint_triple_v2
+# python test_model.py --dataset coco --data_path D:/layout2img_ours/datasets/ --out_path D:/layout2img_ours/test_tsa_v3/ --ckpt_path D:/layout2img_ours/tsa_v3/coco/128/model/G_86.pth --model_name ResnetGenerator128_inpaint_triple_v2
 # python test_model.py --dataset vg --out_path  D:/layout2img_ours/test_tsa_v3/ --ckpt_path D:/layout2img_ours/tsa_v3/vg/128/model/
