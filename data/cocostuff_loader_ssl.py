@@ -251,7 +251,7 @@ class CocoSceneGraphDataset(Dataset):
                 if flip:
                     image = PIL.ImageOps.mirror(image)
                 WW, HH = image.size
-                image = self.transform(image.convert('RGB'))
+                # image = self.transform(image.convert('RGB'))
 
         objs, boxes, masks = [], [], []
         # obj_masks = []

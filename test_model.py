@@ -15,7 +15,7 @@ from collections import OrderedDict
 
 from utils.util import *
 from utils.save_image import *
-from data.cocostuff_loader_ssl import *
+from data.cocostuff_loader_my import *
 from data.vg_direction import *
 from model.resnet_generator_app_v2 import *
 from model.rcnn_discriminator_app import *
@@ -75,7 +75,7 @@ def main(args):
 
     # Load model
     device = torch.device('cuda')
-    
+
     netG = eval(args.model_path)(num_classes=num_classes, pred_classes=pred_classes, output_dim=3).to(device)
     
     if len(glob.glob(args.ckpt_path+'G*'))== 0:
@@ -147,6 +147,8 @@ def main(args):
 
                 # generate images
                 z = torch.randn(real_images.size(0), 3, num_obj, z_dim).to(device)
+                content = {'image_contents': masked_images, 'mask': mask}
+                fake_images_dict = netG()
                 fake_images = netG(z, bbox, y=label.squeeze(dim=-1), triples=triples, masked_images=con_masked_images)
                 fake_images = fake_images * mask + masked_images * (1.-mask)
                 # torchvision.utils.save_image(real_images, "{}/piq/real/{}_real_{:06d}.jpg".format(args.out_path, args.dataset, idx))

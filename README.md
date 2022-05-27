@@ -47,9 +47,11 @@ Note 1: test model should get two or more input with 'dict' type content
 
 | key            | type  | shape              | descrption                              |
 |----------------|-------|--------------------|-----------------------------------------|
-| image_contents | uint8 | [Height,Width, 3]  | masked input (gray color)               |
-| mask           | uint8 | [Height, Width, 1] | mask(1 to mask in each pixel)           |
-| triples        | int   | [# of triples, 3]  | triples (index defined in each dataset) |
+| image_contents | float | [Height,Width, 3]  | masked input
+| mask           | float | [Height, Width, 1] | mask
+| label (optional) | int   | [# objects]  | object index (defined in each dataset) |
+| bbox (optional) | float   | [# of objects, 4]  | bound box with (x, y, w, h) relative position |
+| triples (optional) | int   | [# of triples, 3]  | triples (defined in each dataset) |
 
 Note 2: The result of the model should also be output in the form of a dict.
 
