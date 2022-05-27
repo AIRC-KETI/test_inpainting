@@ -50,14 +50,14 @@ Run the test script:
 python test_model.py \
 --dataset [DATASET] --out_path [OUT_DIR] --ckpt_path [CKPT_DIR] --model_name [MODEL_NAME]
 ```
-#### Note for your own model
+#### Note for test your own model
 
 1. Your own model should be in: 
 ```bash
 ${ROOT}
 ├── data
 ├── model
-|   └── [your model.py]
+    └── [your model.py]
 ├── model_layout2img
 ├── scripts
 ├── utils
