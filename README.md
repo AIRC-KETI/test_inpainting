@@ -93,16 +93,18 @@ python test_samples.py --dataset [DATASET] --out_path [OUT_DIR] --model_path [MO
 
 ## Test Datasets for Various Tasks
 Comming soon.
-<li>Task 1: Hallucinating Visual Instances with Total Absensia (HVITA)</li>
-<ul><li>COCO</li>
-<li>VG</li></ul>
-<li>Task 2: Inpainting</li>
-<ul><li>Places2</li>
-<li>CelebA</li>
-</ul>
-<li>Task 3: HVITA+Inpainting</li>
-<ul><li> [COCO](/data) </li>
-<li> [VG](/data) </li></ul>
+
+* Task 1: Hallucinating Visual Instances with Total Absensia (HVITA)
+
+* Download link: [COCO] [VG]
+
+* Task 2: Inpainting
+
+* Download link: [COCO] [VG]
+
+* Task 3: HVITA+Inpainting
+* Download link: [COCO](https://drive.google.com/file/d/1qT4lydtSC7JEF_3rJemyj8NY1x8uDThq/view?usp=sharing) [VG]
+
 
 ## Reference
 If you find this repo helpful, please consider citing:

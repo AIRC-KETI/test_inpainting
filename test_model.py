@@ -30,8 +30,6 @@ import json
 import glob
 import re
 import piq
-import importlib.util
-import tokenize
 
 def get_dataset(dataset, my_path, img_size):
     if dataset == "coco":
@@ -258,6 +256,7 @@ if __name__ == "__main__":
                         help='file_name')
     parser.add_argument('--img_size', type=str, default=128,
                         help='generated image size')
+    parser.add_argument('--metric', type=str, nargs='+', default='l1 l2 ssim psnr lpips is fid')
     args = parser.parse_args()
     main(args)
 
