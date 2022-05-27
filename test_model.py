@@ -31,6 +31,7 @@ import json
 import glob
 import re
 import piq
+import importlib.util
 
 def get_dataset(dataset, my_path, img_size):
     if dataset == "coco":
@@ -74,13 +75,14 @@ def main(args):
 
     # Load model
     device = torch.device('cuda')
-    netG = ResnetGenerator128_inpaint_triple_v2(num_classes=num_classes, pred_classes=pred_classes, output_dim=3).to(device)
     
-    if len(glob.glob(args.model_path+'G*'))== 0:
+    netG = eval(args.model_path)(num_classes=num_classes, pred_classes=pred_classes, output_dim=3).to(device)
+    
+    if len(glob.glob(args.ckpt_path+'G*'))== 0:
         netG.to(device)
     else:
-        state_dict = torch.load(max(glob.iglob(args.model_path+'G*'), key=os.path.getmtime))
-        print('[*] load_{}'.format(max(glob.iglob(args.model_path+'G*'), key=os.path.getmtime)))
+        state_dict = torch.load(max(glob.iglob(args.ckpt_path+'G*'), key=os.path.getmtime))
+        print('[*] load_{}'.format(max(glob.iglob(args.ckpt_path+'G*'), key=os.path.getmtime)))
         new_state_dict = OrderedDict()
         for k, v in state_dict.items():
             name = k[7:]  # remove `module.`nvidia
@@ -250,6 +252,8 @@ if __name__ == "__main__":
                         help='learning rate for generator')
     parser.add_argument('--out_path', type=str, default='./outputs/tmp/our_d/',
                         help='path to output files')
+    parser.add_argument('--ckpt_path', type=str, default='D:/layout2img_ours/tsa_v3/coco/128/model/',
+                        help='path to checkpoint file')
     parser.add_argument('--model_path', type=str, default='ResnetGenerator128_inpaint_triple_v2',
                         help='path to output files')
     parser.add_argument('--img_size', type=str, default=128,
@@ -257,5 +261,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
     main(args)
 
-# python test_model.py --dataset coco --out_path D:/layout2img_ours/test_tsa_v3/ --model_path D:/layout2img_ours/tsa_v3/coco/128/model/ --model_path ResnetGenerator128_inpaint_triple_v2
-# python test_model.py --dataset vg --out_path  D:/layout2img_ours/test_tsa_v3/ --model_path  D:/layout2img_ours/tsa_v3/vg/128/model/
+# python test_model.py --dataset coco --out_path D:/layout2img_ours/test_tsa_v3/ --ckpt_path D:/layout2img_ours/tsa_v3/coco/128/model/ --model_path ResnetGenerator128_inpaint_triple_v2
+# python test_model.py --dataset vg --out_path  D:/layout2img_ours/test_tsa_v3/ --ckpt_path D:/layout2img_ours/tsa_v3/vg/128/model/

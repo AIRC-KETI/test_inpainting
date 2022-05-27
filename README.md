@@ -43,13 +43,19 @@ python scripts/preprocess_vg.py
 - [ ] Hyein et al.
 
 ## Test Model
-Note: test model should get two or more input with 'dict' type content
+Note 1: test model should get two or more input with 'dict' type content
 
 | key            | type  | shape              | descrption                              |
 |----------------|-------|--------------------|-----------------------------------------|
 | image_contents | uint8 | [Height,Width, 3]  | masked input (gray color)               |
 | mask           | uint8 | [Height, Width, 1] | mask(1 to mask in each pixel)           |
 | triples        | int   | [# of triples, 3]  | triples (index defined in each dataset) |
+
+Note 2: The result of the model should also be output in the form of a dict.
+
+| key            | type  | shape              | descrption                              |
+|----------------|-------|--------------------|-----------------------------------------|
+| image_contents | uint8 | [Height,Width, 3]  | inpainted results |
 
 ```bash
 python test_model.py --dataset [DATASET] --out_path [OUT_DIR] --model_path [MODEL_DIR]
