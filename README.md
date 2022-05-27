@@ -43,21 +43,40 @@ python scripts/preprocess_vg.py
 - [ ] Hyein et al.
 
 ## Test Model
+
+Note: Your own model should be in: 
+```bash
+${ROOT}
+├── data
+├── model
+|   └── [your model.py]
+├── model_layout2img
+├── scripts
+├── utils
+├── utils_layout2img
+├── INSTALL.md
+├── README.md
+├── requirements.txt
+├── test_model.py
+└── test_samples.py
+```
+
+### Input and Output type
 Note 1: test model should get two or more input with 'dict' type content
 
-| key            | type  | shape              | descrption                              |
-|----------------|-------|--------------------|-----------------------------------------|
-| image_contents | float | [Height,Width, 3]  | masked input
-| mask           | float | [Height, Width, 1] | mask
-| label (optional) | int   | [# objects]  | object index (defined in each dataset) |
-| bbox (optional) | float   | [# of objects, 4]  | bound box with (x, y, w, h) relative position |
-| triples (optional) | int   | [# of triples, 3]  | triples (defined in each dataset) |
+| key                | type      | range                 | shape              | descrption                                    |
+|--------------------|-----------|-----------------------|--------------------|-----------------------------------------------|
+| image_contents     | float     | [-1,1]                | [Height,Width, 3]  | masked input (gray color)                     |
+| mask               | float,int | [0, 1]                | [Height, Width, 1] | mask(1 to mask in each pixel)                 |
+| label (optional)   | int       | [0, # of label index) | [# of objects]     | object index (defined in each dataset)        |
+| bbox (optional)    | float     | [0, 1]                | [# of objects, 4]  | bound box with (x, y, w, h) relative position |
+| triples (optional) | int       | [0,# of triples)      | [# of triples, 3]  | triples (index defined in each dataset)       |
 
 Note 2: The result of the model should also be output in the form of a dict.
 
-| key            | type  | shape              | descrption                              |
-|----------------|-------|--------------------|-----------------------------------------|
-| image_contents | uint8 | [Height,Width, 3]  | inpainted results |
+| key                | type      | range                 | shape              | descrption                                    |
+|--------------------|-----------|-----------------------|--------------------|-----------------------------------------------|
+| image_contents     | float     | [-1,1]                | [Height,Width, 3]  |inpaintied results                     |
 
 ```bash
 python test_model.py --dataset [DATASET] --out_path [OUT_DIR] --model_path [MODEL_DIR]

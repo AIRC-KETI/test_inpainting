@@ -1372,7 +1372,6 @@ class ResnetGenerator128_inpaint_triple_v2(nn.Module):
 
         num_w = object_embedding_size + 128
         self.num_w = num_w
-        # self.context = BoxMultiHeadedAttention(1, num_w, dropout=0.0)
         self.context = MultiHeadAttention(1, num_w, num_w, num_w, dropout=0.0)
         self.fc = nn.utils.spectral_norm(nn.Linear(z_dim, 4 * 4 * 16 * ch))
         self.res1 = ResBlock(ch * 16 + 4, ch * 16, upsample=True, num_w=num_w)
@@ -1396,10 +1395,16 @@ class ResnetGenerator128_inpaint_triple_v2(nn.Module):
         self.mask_regress = MaskRegressNetv2(num_w)
         self.init_parameter()
 
-    def forward(self, z, bbox, z_im=None, y=None, triples=None, masked_images=None):
+    def forward(self, content):
+        bbox = content['bbox']
+        y = content['label']
+        triples = content['triples']
+        masked_images = content['image_contents']
+        mask = content['mask']
+        z = torch.randn(masked_images.size(0), 3, y.size(-1), 128).to('cuda')
         b, obj = z.size(0), z.size(2)
+        masked_images = torch.cat((masked_images * (1.-mask) + 0.5 * mask, mask), 1)
         label_embedding = self.label_embedding(y)
-        # print(label_embedding) still ok
 
         s, p, o = triples.chunk(3, dim=-1)  # [B,# of triples, 1]
         s, p, o = [x.squeeze(-1) for x in [s, p, o]]  # [B, # of triples]
@@ -1425,13 +1430,11 @@ class ResnetGenerator128_inpaint_triple_v2(nn.Module):
         pred_embedding = torch.cat((pred_embedding, z_p), dim=-1)
         o_label_embedding = torch.cat((o_label_embedding, z_o), dim=-1)
 
-        # w = self.context(s_label_embedding, o_label_embedding, pred_embedding, bbox)
         w = self.context(s_label_embedding, -pred_embedding + o_label_embedding,  -pred_embedding + o_label_embedding) + s_label_embedding
         w = w.view(b * obj, -1)
         bmask = self.mask_regress(w, bbox)
 
-        if z_im is None:
-            z_im = torch.randn((b, 128), device=z.device)
+        z_im = torch.randn((b, 128), device=z.device)
 
         bbox_mask_ = bbox_mask(z, bbox, 64, 64)
 
@@ -1483,12 +1486,8 @@ class ResnetGenerator128_inpaint_triple_v2(nn.Module):
         x = torch.cat((x, temp_masked_image), dim=1)
         x, _ = self.res5(x, w, stage_bbox)
 
-        # to RGB
-        # hh, ww = x.size(2), x.size(3)
-        # temp_masked_image = F.interpolate(masked_images, size=(hh, ww), mode='nearest')
-        # x = torch.cat((x, temp_masked_image), dim=1)
         x = self.final(x)
-        return x
+        return {'image_contents': x}
 
     def init_parameter(self):
         for k in self.named_parameters():
