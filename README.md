@@ -43,6 +43,13 @@ python scripts/preprocess_vg.py
 - [ ] Hyein et al.
 
 ## Test Model
+Note: test model should get two or more input with 'dict' type content
+
+| key            | type  | shape              | descrption                              |
+|----------------|-------|--------------------|-----------------------------------------|
+| image_contents | uint8 | [Height,Width, 3]  | masked input (gray color)               |
+| mask           | uint8 | [Height, Width, 1] | mask(1 to mask in each pixel)           |
+| triples        | int   | [# of triples, 3]  | triples (index defined in each dataset) |
 
 ```bash
 python test_model.py --dataset [DATASET] --out_path [OUT_DIR] --model_path [MODEL_DIR]
@@ -51,7 +58,7 @@ python test_model.py --dataset [DATASET] --out_path [OUT_DIR] --model_path [MODE
 ## Test Samples
 Note 1: Measuring IS or FID is recommended by generating more than 50,000 samples [WGAN-GP, TTUR]
 
-Note 2: The data type is converted from float to uint8 when saving the image. For accurate measurement, use the test model whenever possible.
+Note 2: The data type is converted from float to uint8 when saving the image. For accurate measurement, use the [test_model.py](/test_model.py) whenever possible.
 
 ```bash
 python test_samples.py --dataset [DATASET] --out_path [OUT_DIR] --model_path [MODEL_DIR]

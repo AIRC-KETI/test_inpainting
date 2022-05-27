@@ -15,7 +15,7 @@ from collections import OrderedDict
 
 from utils.util import *
 from utils.save_image import *
-from data.cocostuff_loader_my import *
+from data.cocostuff_loader_ssl import *
 from data.vg_direction import *
 from model.resnet_generator_app_v2 import *
 from model.rcnn_discriminator_app import *
@@ -250,12 +250,12 @@ if __name__ == "__main__":
                         help='learning rate for generator')
     parser.add_argument('--out_path', type=str, default='./outputs/tmp/our_d/',
                         help='path to output files')
-    parser.add_argument('--model_path', type=str, default='./my_outputs/model/',
+    parser.add_argument('--model_path', type=str, default='ResnetGenerator128_inpaint_triple_v2',
                         help='path to output files')
     parser.add_argument('--img_size', type=str, default=128,
                         help='generated image size')
     args = parser.parse_args()
     main(args)
 
-# python test_model.py --dataset coco --out_path D:/layout2img_ours/test_tsa_v3/ --model_path D:/layout2img_ours/tsa_v3/coco/128/model/
+# python test_model.py --dataset coco --out_path D:/layout2img_ours/test_tsa_v3/ --model_path D:/layout2img_ours/tsa_v3/coco/128/model/ --model_path ResnetGenerator128_inpaint_triple_v2
 # python test_model.py --dataset vg --out_path  D:/layout2img_ours/test_tsa_v3/ --model_path  D:/layout2img_ours/tsa_v3/vg/128/model/
