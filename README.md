@@ -6,7 +6,7 @@ This repo is not yet complete.
 ## Availabe Metrics
 In this test, the following metrics are evaluated.
 
-*  L1
+*  L1 (SSL 1-1 metric)
 *  L2
 *  Structural SIMilarity (SSIM)
 *  Peak Signal-to-Noise Ratio (PSNR)
@@ -38,7 +38,7 @@ python scripts/preprocess_vg.py
 ```
 ## Model List
 - [X] STALostGAN (Ours)
-- [ ] LostGAN
+- [X] LostGAN
 - [ ] CAL2IM
 - [ ] CIAFILL
 - [ ] Hyein et al.
@@ -91,7 +91,7 @@ ${ROOT}
 Run the test script:
 
 ```bash
-python test_samples.py --dataset [DATASET] --out_path [OUT_DIR] --ckpt_path [CKPT_DIR]
+python test_samples.py --dataset [DATASET] --real_path [DATASET PATH] --fake_path [FAKE PATH] --out_path [OUT PATH]
 ```
 Note 1: Measuring IS or FID is recommended by generating more than 50,000 samples [WGAN-GP, TTUR]
 

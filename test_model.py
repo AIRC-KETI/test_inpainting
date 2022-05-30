@@ -221,6 +221,8 @@ if __name__ == "__main__":
 # ResnetGenerator128_inpaint_triple_v2
 # ResnetGenerator128_inpaint_subject
 
+# python test_model.py --dataset coco --data_path D:/layout2img_ours/datasets/ --out_path D:/layout2img_ours/subject_only/ --ckpt_path D:/layout2img_ours/subject_only/coco/128/model/G_181.pth --model_name ResnetGenerator128_inpaint_subject
+
     '''
     print('[*] l1: {} %'.format(100. * test_l1/(batch_count+1.e-6)))
     print('[*] l2: {} %'.format(100. * test_l2/(batch_count+1.e-6)))

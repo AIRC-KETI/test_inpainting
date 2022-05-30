@@ -1142,12 +1142,15 @@ class ResnetGenerator128_inpaint_subject(nn.Module):
         self.mask_regress = MaskRegressNetv2(num_w)
         self.init_parameter()
 
-    def forward(self, z, bbox, z_im=None, y=None, triples=None, masked_images=None):
-        # print(z)
-        # print(bbox)
-        # print(y)
-        # print(triples)  still ok
+    def forward(self,content):
+        bbox = content['bbox']
+        y = content['label']
+        triples = content['triples']
+        masked_images = content['image_contents']
+        mask = content['mask']
+        z = torch.randn(masked_images.size(0), y.size(-1), 128).to('cuda')
         b, obj = z.size(0), z.size(1)
+        masked_images = torch.cat((masked_images * (1.-mask) + 0.5 * mask, mask), 1)
         label_embedding = self.label_embedding(y)
         # print(label_embedding) still ok
         z = z.view(b * obj, -1)
@@ -1157,9 +1160,8 @@ class ResnetGenerator128_inpaint_subject(nn.Module):
         w = self.mapping(latent_vector.view(b * obj, -1)).view(b, obj, -1)
         w = w.view(b * obj, -1)
         bmask = self.mask_regress(w, bbox)
-
-        if z_im is None:
-            z_im = torch.randn((b, 128), device=z.device)
+        
+        z_im = torch.randn((b, 128), device=z.device)
 
         bbox_mask_ = bbox_mask(z, bbox, 64, 64)
 
@@ -1213,7 +1215,7 @@ class ResnetGenerator128_inpaint_subject(nn.Module):
 
         # to RGB
         x = self.final(x)
-        return x
+        return {'image_contents': x}
 
     def init_parameter(self):
         for k in self.named_parameters():
