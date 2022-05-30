@@ -461,29 +461,25 @@ class COCOPairDataset(Dataset):
     
     def __len__(self):
         if self.max_samples is None:
-            if self.left_right_flip:
-                return min(len(self.image_ids)*2, len(self.fake_ids))
-            return min(len(self.image_ids), len(self.fake_ids))
+            return max(len(self.image_ids), len(self.fake_ids))
         return [len(self.image_ids), self.max_samples, len(self.fake_ids)].sort()[0]
     
     def __getitem__(self, index):    
-        flip = False
         f_index = index
-        if index >= len(self.image_ids):
-            index = index - len(self.image_ids)
-            flip = True
-        image_id = self.image_ids[index]
+        real_index = index
+        while real_index >= len(self.image_ids):
+            real_index = real_index - len(self.image_ids)
+
+        image_id = self.image_ids[real_index]
         if self.instances_json is not None:
             filename = self.image_id_to_filename[image_id]
             image_path = os.path.join(self.image_dir, filename)
             fake_path = self.fake_id_to_filename[f_index]
         if self.instances_json is None:
-            image_path = self.image_id_to_filename[index]
+            image_path = self.image_id_to_filename[real_index]
             fake_path = self.fake_id_to_filename[f_index]
         with open(image_path, 'rb') as r:
             with PIL.Image.open(r) as image:
-                if flip:
-                    image = PIL.ImageOps.mirror(image)
                 WW, HH = image.size
                 image = self.transform(image.convert('RGB'))
         with open(fake_path, 'rb') as f:
@@ -527,7 +523,7 @@ class VGPairDataset(Dataset):
     def __len__(self):
         num = self.data['object_names'].size(0)
         fake_num = len(self.fake_list)
-        return min(num, fake_num)
+        return max(num, fake_num)
 
     def __getitem__(self, index):
         """
@@ -539,8 +535,11 @@ class VGPairDataset(Dataset):
         - triples: LongTensor of shape (T, 3) where triples[t] = [i, p, j]
           means that (objs[i], p, objs[j]) is a triple.
         """
-        # print('[*] {}, {}'.format(self.image_dir, self.image_paths[index].decode("utf-8")))
-        img_path = os.path.join(self.image_dir, self.image_paths[index].decode("utf-8"))
+        real_index = index
+        while real_index >= self.data['object_names'].size(0):
+            real_index = real_index - self.data['object_names'].size(0)
+
+        img_path = os.path.join(self.image_dir, self.image_paths[real_index].decode("utf-8"))
         fake_path = self.fake_list[index]
         with open(img_path, 'rb') as r:
             with PIL.Image.open(r) as image:
