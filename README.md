@@ -112,8 +112,8 @@ Note 2: The data type is converted from float to uint8 when saving the image. Fo
 
 #### Task 3: HVITA+Inpainting
 
-* Download link: [COCO 128x128](https://drive.google.com/file/d/1qT4lydtSC7JEF_3rJemyj8NY1x8uDThq/view?usp=sharing)
-* Download link: [VG 128x128](https://drive.google.com/file/d/1asCc5dBo7EhuzkMARbwa-LUyRlSP9DuZ/view?usp=sharing)
+* Download link: [COCO 128x128](https://drive.google.com/file/d/11xapK9GCIP-iZuvn8julofitQ_EPpNbh/view?usp=sharing)
+* Download link: [VG 128x128](https://drive.google.com/file/d/1ONn3-sABfuFhjZj81X3VQqHvV-24ShuY/view?usp=sharing)
 
 
 ## Reference
