@@ -10,7 +10,7 @@ In this test, the following metrics are evaluated.
 - [X] L2
 - [X] Structural SIMilarity (SSIM, SSL 2-3 metric)
 - [X] Peak Signal-to-Noise Ratio (PSNR)
-- [X] Learned Perceptual Image Patch Similarity (LPIPS)
+- [X] Learned Perceptual Image Patch Similarity (LPIPS, SSL 2-1 metric)
 - [X] Inception Score (IS)
 - [X] Frechet Inception Distance (FID, SSL 2-2 metric) 
 - [ ] The size of the smallest part that can be reconstructed (SSL 1-2 metric, COCO and VG only)
