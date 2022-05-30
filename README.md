@@ -98,9 +98,9 @@ Note 1: Measuring IS or FID is recommended by generating more than 50,000 sample
 Note 2: The data type is converted from float to uint8 when saving the image. For accurate measurement, use the [test_model.py](/test_model.py) whenever possible.
 
 
-## Test Datasets for Various Tasks (PIW)
+## Test Datasets for Various Tasks
 
-#### Task 1: Hallucinating Visual Instances with Total Absensia (HVITA)
+#### Task 1: Hallucinating Visual Instances with Total Absensia
 
 * Download link: [COCO] [VG]
 
