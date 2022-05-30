@@ -166,6 +166,7 @@ def main(args):
 
     fake_feats = torch.squeeze(fake_feats)
     test_is = inception_score(ins_feat)    
+    test_is_ = inception_score(ins_feat[:5000])
     real_feats = torch.squeeze(real_feats)
     print(torch.var_mean(fake_feats, unbiased=False))  # [0.1105, 0.3413]
     print(torch.var_mean(real_feats, unbiased=False))  # [0.1045, 0.3143]
@@ -176,7 +177,7 @@ def main(args):
     print('[*] ssim: {}'.format(test_ssim/(batch_count+1.e-6)))
     print('[*] psnr: {}'.format(test_psnr/(batch_count+1.e-6)))
     print('[*] lpips: {}'.format(test_lpips/(batch_count+1.e-6)))
-    print('[*] IS: {} \n'.format(test_is))
+    print('[*] IS: {} {} \n'.format(test_is, test_is_))
     print('[*] FID: {} \n'.format(test_fid))
 
     f= open(args.out_path + "/quantitative_results.txt","w+")
@@ -214,7 +215,7 @@ if __name__ == "__main__":
     main(args)
 
 # python test_model.py --dataset coco --data_path D:/layout2img_ours/datasets/ --out_path D:/layout2img_ours/test_tsa_v3/ --ckpt_path D:/layout2img_ours/tsa_v3/coco/128/model/G_86.pth --model_name ResnetGenerator128_inpaint_triple_v2
-# python test_model.py --dataset vg --out_path  D:/layout2img_ours/test_tsa_v3/ --ckpt_path D:/layout2img_ours/tsa_v3/vg/128/model/
+# python test_model.py --dataset vg --data_path D:/layout2img_ours/datasets/ --out_path  D:/layout2img_ours/test_tsa_v3/ --ckpt_path D:/layout2img_ours/tsa_v3/vg/128/model/G_47.pth --model_name ResnetGenerator128_inpaint_triple_v2
 
 # model name list
 # ResnetGenerator128_inpaint_triple_v2
