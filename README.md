@@ -6,15 +6,15 @@ This repo is not yet complete.
 ## Availabe Metrics
 In this test, the following metrics are evaluated.
 
-*  L1 (SSL 1-1 metric)
-*  L2
-*  Structural SIMilarity (SSIM)
-*  Peak Signal-to-Noise Ratio (PSNR)
-*  Learned Perceptual Image Patch Similarity (LPIPS)
-*  Inception Score (IS)
-*  Frechet Inception Distance (FID)
-- [ ] SSL 1-2 metric
-- [ ] SSL 3 metric
+- [X] L1 (SSL 1-1 metric)
+- [X] L2
+- [X] Structural SIMilarity (SSIM, SSL 2-3 metric)
+- [X] Peak Signal-to-Noise Ratio (PSNR)
+- [X] Learned Perceptual Image Patch Similarity (LPIPS)
+- [X] Inception Score (IS)
+- [X] Frechet Inception Distance (FID, SSL 2-2 metric) 
+- [ ] The size of the smallest part that can be reconstructed (SSL 1-2 metric, COCO and VG only)
+- [ ] Restoration success rate of noise / part deletion video (SSL 3 metric, COCO and VG only)
 
 ## Requirements
 please see [INSTALL.md](INSTALL.md).
@@ -22,7 +22,7 @@ please see [INSTALL.md](INSTALL.md).
 ## TODO
 - [X] COCO validation with ours
 - [X] VG validation with ours
-- [ ] validations with other methods
+- [X] validations with other methods
 - [ ] Valdiations with other metrics
 - [ ] Link for download test datasets
 
