@@ -106,6 +106,27 @@ Note 2: The data type is converted from float to uint8 when saving the image. Fo
 * Download link: [COCO 128x128](https://drive.google.com/file/d/10AFxZRvI9Q0sk5Y_pw4AoRyE3uSGrrD9/view?usp=sharing)
 * Download link: [VG 128x128](https://drive.google.com/file/d/1SL8vApyWbWp1K13nvBSvp4myE7eAg4GO/view?usp=sharing)
 
+Note: The dataset consists of masked_images, masks, and real folders. Each folder contains images with completely absent objects corresponding to the index defined in each dataset.
+
+```bash
+{data}_{resolution}_hvita
+├── masked_images
+    └── 000
+    └── 001
+    ...
+    └── xxx(the last index number)
+├── masks
+    └── 000
+    └── 001
+    ...
+    └── xxx(the last index number)
+├── real
+    └── 000
+    └── 001
+    ...
+    └── xxx(the last index number)
+```
+
 #### Task 2: Inpainting
 
 * Download link: [Places2](http://places2.csail.mit.edu/download.html)
@@ -117,6 +138,7 @@ Note 2: The data type is converted from float to uint8 when saving the image. Fo
 * Download link: [COCO 128x128](https://drive.google.com/file/d/11xapK9GCIP-iZuvn8julofitQ_EPpNbh/view?usp=sharing)
 * Download link: [VG 128x128](https://drive.google.com/file/d/1ONn3-sABfuFhjZj81X3VQqHvV-24ShuY/view?usp=sharing)
 
+Note: A set of random tests mixed with a random rectangular mask or a mask in which the object is completely absent.
 
 ## Reference
 If you find this repo helpful, please consider citing:
