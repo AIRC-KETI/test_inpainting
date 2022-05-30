@@ -298,7 +298,7 @@ class ImageOnlyDatasetVG(Dataset):
 class COCOPairDataset(Dataset):
     def __init__(self, image_dir, fake_dir, instances_json=None, stuff_json=None,
                  stuff_only=True, image_size=(299, 299), mask_size=16,
-                 max_samples=None, normalize_images=True,
+                 max_samples=None, normalize_images=False,
                  include_relationships=True, min_object_size=0.02,
                  min_objects_per_image=3, max_objects_per_image=8, left_right_flip=False,
                  include_other=False, instance_whitelist=None, stuff_whitelist=None):
@@ -490,3 +490,66 @@ class COCOPairDataset(Dataset):
             with PIL.Image.open(f) as fake:
                 fake = self.transform(fake.convert('RGB'))
         return {'images': image, 'fakes': fake}
+
+
+class VGPairDataset(Dataset):
+    def __init__(self, vocab_json, h5_path, image_dir, fake_dir, image_size=(256, 256),
+                 normalize_images=False, max_objects=10, max_samples=None,
+                 include_relationships=True, use_orphaned_objects=True):
+        super(VGPairDataset, self).__init__()
+
+        self.image_dir = image_dir
+        self.fake_dir = fake_dir
+        self.image_size = image_size
+        with open(vocab_json, 'r') as f:
+            self.vocab = json.load(f)
+        self.num_objects = len(self.vocab['object_idx_to_name'])
+        self.use_orphaned_objects = use_orphaned_objects
+        self.max_objects = max_objects
+        self.max_samples = max_samples
+        self.normalize_images = normalize_images
+        self.include_relationships = include_relationships
+
+        transform = [Resize(image_size), T.ToTensor()]
+        if self.normalize_images:
+            transform.append(imagenet_preprocess())
+        self.transform = T.Compose(transform)
+
+        self.data = {}
+        with h5py.File(h5_path, 'r') as f:
+            for k, v in f.items():
+                if k == 'image_paths':
+                    self.image_paths = list(v)
+                else:
+                    self.data[k] = torch.IntTensor(np.asarray(v))
+        self.fake_list = glob.glob(self.fake_dir+'/*')
+
+    def __len__(self):
+        num = self.data['object_names'].size(0)
+        fake_num = len(self.fake_list)
+        return min(num, fake_num)
+
+    def __getitem__(self, index):
+        """
+        Returns a tuple of:
+        - image: FloatTensor of shape (C, H, W)
+        - objs: LongTensor of shape (O,)
+        - boxes: FloatTensor of shape (O, 4) giving boxes for objects in
+          (x0, y0, x1, y1) format, in a [0, 1] coordinate system.
+        - triples: LongTensor of shape (T, 3) where triples[t] = [i, p, j]
+          means that (objs[i], p, objs[j]) is a triple.
+        """
+        # print('[*] {}, {}'.format(self.image_dir, self.image_paths[index].decode("utf-8")))
+        img_path = os.path.join(self.image_dir, self.image_paths[index].decode("utf-8"))
+        fake_path = self.fake_list[index]
+        with open(img_path, 'rb') as r:
+            with PIL.Image.open(r) as image:
+                WW, HH = image.size
+                image = self.transform(image.convert('RGB'))
+        
+        with open(fake_path, 'rb') as f:
+            with PIL.Image.open(f) as fake_image:
+                WW, HH = fake_image.size
+                fake_image = self.transform(fake_image.convert('RGB'))
+        H, W = self.image_size
+        return {'images': image, 'fakes': fake_image}
