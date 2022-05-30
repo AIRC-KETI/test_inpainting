@@ -72,8 +72,8 @@ def main(args):
     # Load model
     device = torch.device('cuda')
     netG = eval(args.model_name)(num_classes=num_classes, pred_classes=pred_classes, output_dim=3).to(device)
-    
-    assert os.path.isfile(args.ckpt_path) is False
+    # print(os.path.isfile(args.ckpt_path))
+    assert os.path.isfile(args.ckpt_path) is True
     state_dict = torch.load(args.ckpt_path)
     print('[*] load_{}'.format(args.ckpt_path))
     new_state_dict = OrderedDict()
@@ -163,54 +163,7 @@ def main(args):
                     temp_fake_feats, temp_ins_feat = inception_v3(fake_images)
                     fake_feats = torch.cat((fake_feats, temp_fake_feats), 0)
                     ins_feat = torch.cat((ins_feat, temp_ins_feat), 0)
-    '''
-    print('[*] l1: {} %'.format(100. * test_l1/(batch_count+1.e-6)))
-    print('[*] l2: {} %'.format(100. * test_l2/(batch_count+1.e-6)))
-    print('[*] ssim: {}'.format(test_ssim/(batch_count+1.e-6)))
-    print('[*] psnr: {}'.format(test_psnr/(batch_count+1.e-6)))
-    print('[*] lpips: {}'.format(test_lpips/(batch_count+1.e-6)))
-    
-    fake_dir = '{}/samples/'.format(args.out_path)
-    if args.dataset == "coco":
-        real_dataset = ImageOnlyDataset(args.data_path + './coco/val2017/',
-                                    instances_json=args.data_path+'./coco/annotations/instances_val2017.json',
-                                    stuff_json=args.data_path+'./coco/annotations/stuff_val2017.json', image_size=(128, 128), left_right_flip=False)
-    elif args.dataset == 'vg':
-        real_dataset = ImageOnlyDatasetVG(vocab_json=args.data_path+'./vg/vocab.json', h5_path=args.data_path+'./vg/test.h5',
-                                   image_dir=args.data_path+'./vg/images/',
-                                   image_size=(img_size, img_size), max_objects=7, left_right_flip=False)
-    
-    fake_dataset = ImageOnlyDataset(fake_dir, image_size=(299, 299), left_right_flip=False)
-    
-    real_dataloader = torch.utils.data.DataLoader(
-        real_dataset, batch_size=args.batch_size,
-        drop_last=False, shuffle=False, num_workers=num_workers)
 
-    fake_dataloader = torch.utils.data.DataLoader(
-        fake_dataset, batch_size=args.batch_size,
-        drop_last=False, shuffle=False, num_workers=num_workers)
-
-    with torch.no_grad():
-        for idx, data in enumerate(tqdm(fake_dataloader)):
-            images = data['images'].to(device)
-            if idx == 0:
-                fake_feats, ins_feat = inception_v3(images)
-            else:
-                temp_fake_feats, temp_ins_feat = inception_v3(images)
-                fake_feats = torch.cat((fake_feats, temp_fake_feats), 0)
-                ins_feat = torch.cat((ins_feat, temp_ins_feat), 0)
-    
-    with torch.no_grad():
-        for idx, data in enumerate(tqdm(real_dataloader)):
-            images = data['images'].to(device)
-            images = F.interpolate(images, size=(299, 299), mode='nearest')
-            if idx == 0:
-                real_feats, real_feats_1000 = inception_v3(images)
-            else:
-                temp_real_feats, temp_real_feats_1000 = inception_v3(images)
-                real_feats = torch.cat((real_feats, temp_real_feats), 0)
-                real_feats_1000 = torch.cat((real_feats_1000, temp_real_feats_1000), 0)
-    '''
     fake_feats = torch.squeeze(fake_feats)
     test_is = inception_score(ins_feat)    
     real_feats = torch.squeeze(real_feats)
@@ -262,3 +215,56 @@ if __name__ == "__main__":
 
 # python test_model.py --dataset coco --data_path D:/layout2img_ours/datasets/ --out_path D:/layout2img_ours/test_tsa_v3/ --ckpt_path D:/layout2img_ours/tsa_v3/coco/128/model/G_86.pth --model_name ResnetGenerator128_inpaint_triple_v2
 # python test_model.py --dataset vg --out_path  D:/layout2img_ours/test_tsa_v3/ --ckpt_path D:/layout2img_ours/tsa_v3/vg/128/model/
+
+# model name list
+# ResnetGenerator128_inpaint_triple_v2
+# ResnetGenerator128_inpaint_subject
+
+    '''
+    print('[*] l1: {} %'.format(100. * test_l1/(batch_count+1.e-6)))
+    print('[*] l2: {} %'.format(100. * test_l2/(batch_count+1.e-6)))
+    print('[*] ssim: {}'.format(test_ssim/(batch_count+1.e-6)))
+    print('[*] psnr: {}'.format(test_psnr/(batch_count+1.e-6)))
+    print('[*] lpips: {}'.format(test_lpips/(batch_count+1.e-6)))
+    
+    fake_dir = '{}/samples/'.format(args.out_path)
+    if args.dataset == "coco":
+        real_dataset = ImageOnlyDataset(args.data_path + './coco/val2017/',
+                                    instances_json=args.data_path+'./coco/annotations/instances_val2017.json',
+                                    stuff_json=args.data_path+'./coco/annotations/stuff_val2017.json', image_size=(128, 128), left_right_flip=False)
+    elif args.dataset == 'vg':
+        real_dataset = ImageOnlyDatasetVG(vocab_json=args.data_path+'./vg/vocab.json', h5_path=args.data_path+'./vg/test.h5',
+                                   image_dir=args.data_path+'./vg/images/',
+                                   image_size=(img_size, img_size), max_objects=7, left_right_flip=False)
+    
+    fake_dataset = ImageOnlyDataset(fake_dir, image_size=(299, 299), left_right_flip=False)
+    
+    real_dataloader = torch.utils.data.DataLoader(
+        real_dataset, batch_size=args.batch_size,
+        drop_last=False, shuffle=False, num_workers=num_workers)
+
+    fake_dataloader = torch.utils.data.DataLoader(
+        fake_dataset, batch_size=args.batch_size,
+        drop_last=False, shuffle=False, num_workers=num_workers)
+
+    with torch.no_grad():
+        for idx, data in enumerate(tqdm(fake_dataloader)):
+            images = data['images'].to(device)
+            if idx == 0:
+                fake_feats, ins_feat = inception_v3(images)
+            else:
+                temp_fake_feats, temp_ins_feat = inception_v3(images)
+                fake_feats = torch.cat((fake_feats, temp_fake_feats), 0)
+                ins_feat = torch.cat((ins_feat, temp_ins_feat), 0)
+    
+    with torch.no_grad():
+        for idx, data in enumerate(tqdm(real_dataloader)):
+            images = data['images'].to(device)
+            images = F.interpolate(images, size=(299, 299), mode='nearest')
+            if idx == 0:
+                real_feats, real_feats_1000 = inception_v3(images)
+            else:
+                temp_real_feats, temp_real_feats_1000 = inception_v3(images)
+                real_feats = torch.cat((real_feats, temp_real_feats), 0)
+                real_feats_1000 = torch.cat((real_feats_1000, temp_real_feats_1000), 0)
+    '''

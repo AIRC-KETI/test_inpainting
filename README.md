@@ -1,19 +1,20 @@
 # Test model
 This repository includes the implementation for inpainting test.
 
+This repo is not yet complete.
+
+## Availabe Metrics
 In this test, the following metrics are evaluated.
 
 *  L1
 *  L2
-*  SSIM
-*  PSNR
-*  LPIPS
-*  IS
-*  FID
+*  Structural SIMilarity (SSIM)
+*  Peak Signal-to-Noise Ratio (PSNR)
+*  Learned Perceptual Image Patch Similarity (LPIPS)
+*  Inception Score (IS)
+*  Frechet Inception Distance (FID)
 - [ ] SSL 1-2 metric
 - [ ] SSL 3 metric
-
-This repo is not yet complete.
 
 ## Requirements
 please see [INSTALL.md](INSTALL.md).
@@ -36,7 +37,7 @@ bash scripts/download_vg.sh
 python scripts/preprocess_vg.py
 ```
 ## Model List
-- [X] TSA2IM (Ours)
+- [X] STALostGAN (Ours)
 - [ ] LostGAN
 - [ ] CAL2IM
 - [ ] CIAFILL
@@ -105,7 +106,9 @@ Note 2: The data type is converted from float to uint8 when saving the image. Fo
 
 #### Task 2: Inpainting
 
-* Download link: [COCO] [VG]
+* Download link: [Places2](http://places2.csail.mit.edu/download.html)
+* Download link:  [CelebA-HQ](https://drive.google.com/drive/folders/0B4qLcYyJmiz0TXY1NG02bzZVRGs?resourcekey=0-arAVTUfW9KRhN-irJchVKQ)
+* Download link:  [IrregularMask](https://www.dropbox.com/s/01dfayns9s0kevy/test_mask.zip?dl=0)
 
 #### Task 3: HVITA+Inpainting
 

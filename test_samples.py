@@ -160,5 +160,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
     main(args)
 
-# python test_samples.py --dataset coco --out_path D:/layout2img_ours/test_tsa_v3/ --ckpt_path D:/layout2img_ours/tsa_v3/coco/128/model/
-# python test_model.py --dataset vg --out_path  D:/layout2img_ours/test_tsa_v3/ --ckpt_path  D:/layout2img_ours/tsa_v3/vg/128/model/
+# python test_samples.py --dataset coco --out_path D:/layout2img_ours/test_tsa_v3/
+# python test_samples.py --dataset vg --out_path  D:/layout2img_ours/test_tsa_v3/
