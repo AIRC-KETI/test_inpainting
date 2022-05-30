@@ -36,12 +36,6 @@ Download VG dataset to datasets/vg
 bash scripts/download_vg.sh
 python scripts/preprocess_vg.py
 ```
-## Model List
-- [X] STALostGAN (Ours)
-- [X] LostGAN
-- [ ] CAL2IM
-- [ ] CIAFILL
-- [ ] Hyein et al.
 
 ## Test Model
 
@@ -85,6 +79,13 @@ ${ROOT}
 | key                | type      | range                 | shape              | descrption                                    |
 |--------------------|-----------|-----------------------|--------------------|-----------------------------------------------|
 | image_contents     | float     | [-1,1]                | [Height,Width, 3]  |inpaintied results                     |
+
+### Model List
+- [X] STALostGAN (Ours)
+- [X] LostGAN
+- [ ] CAL2IM
+- [ ] CIAFILL
+- [ ] Hyein et al.
 
 ## Test Samples
 
