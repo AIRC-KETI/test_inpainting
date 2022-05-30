@@ -104,12 +104,33 @@ def main(args):
         os.makedirs(os.path.join(args.out_path, 'masked_images/'))
     if not os.path.exists(os.path.join(args.out_path, 'grid_samples/')):
         os.makedirs(os.path.join(args.out_path, 'grid_samples/'))
+    if not os.path.exists(os.path.join(args.out_path, 'categories/')):
+        os.makedirs(os.path.join(args.out_path, 'categories/'))
+    if not os.path.exists(os.path.join(args.out_path, 'categories/real')):
+        os.makedirs(os.path.join(args.out_path, 'categories/real'))
+    if not os.path.exists(os.path.join(args.out_path, 'categories/masks')):
+        os.makedirs(os.path.join(args.out_path, 'categories/masks'))
+    if not os.path.exists(os.path.join(args.out_path, 'categories/masks')):
+        os.makedirs(os.path.join(args.out_path, 'categories/masks'))
+    if not os.path.exists(os.path.join(args.out_path, 'categories/masked_images')):
+        os.makedirs(os.path.join(args.out_path, 'categories/masked_images'))
+    if not os.path.exists(os.path.join(args.out_path, 'categories/fake_images')):
+        os.makedirs(os.path.join(args.out_path, 'categories/fake_images'))
+    for i in range(200):
+        if not os.path.exists(os.path.join(args.out_path, 'categories/real/{:03d}'.format(i))):
+            os.makedirs(os.path.join(args.out_path, 'categories/real/{:03d}'.format(i)))
+        if not os.path.exists(os.path.join(args.out_path, 'categories/masks/{:03d}'.format(i))):
+            os.makedirs(os.path.join(args.out_path, 'categories/masks/{:03d}'.format(i)))
+        if not os.path.exists(os.path.join(args.out_path, 'categories/masked_images/{:03d}'.format(i))):
+            os.makedirs(os.path.join(args.out_path, 'categories/masked_images/{:03d}'.format(i)))
+        if not os.path.exists(os.path.join(args.out_path, 'categories/fake_images/{:03d}'.format(i))):
+            os.makedirs(os.path.join(args.out_path, 'categories/fake_images/{:03d}'.format(i)))
     writer = SummaryWriter(os.path.join(args.out_path, 'log'))
 
     logger = setup_logger("lostGAN", args.out_path, 0)
     logger.info(netG)
 
-    test_l1, test_l2, test_ssim, test_psnr, test_lpips, test_is, test_fid = 0, 0, 0, 0, 0, 0, 0
+    test_l1, test_l2, test_ssim, test_psnr, test_lpips, test_is, test_is_, test_fid = 0, 0, 0, 0, 0, 0, 0, 0
     inception_v3 = Inceptionv3OnlyFeature().to(device)
     ssim, psnr, lpips = piq.ssim, piq.psnr, piq.LPIPS()
     count = 0
@@ -121,35 +142,33 @@ def main(args):
             for idx, data in enumerate(tqdm(dataloader)):
                 real_images, label, bbox, triples = data
                 real_images, label, bbox, triples = real_images.to(device), label.long().to(device).unsqueeze(-1), bbox.float(), triples.cuda()
-                erased_count = 1
-                selected_bbox, _ = torch.split(bbox, [erased_count, bbox.size(1)-1], dim=1)
-                mask = bil.bbox2_mask(selected_bbox, real_images)  # 1 for mask, 0 for non-mask
-                mask = mask.cuda()
-                masked_images = real_images * (1.-mask)
+                for j in range(label.size(-1)):
+                    selected_bbox = torch.unsqueeze(bbox[:,j,:], 1)
+                    mask = bil.bbox2_mask(selected_bbox, real_images, is_train=False)  # 1 for mask, 0 for non-mask
+                    mask = mask.cuda()
+                    masked_images = real_images * (1.-mask)
+                    # generate images
+                    content = {'image_contents': masked_images, 'mask': mask, 'label': label.squeeze(dim=-1), 'bbox': bbox, 'triples': triples}
+                    fake_images_dict = netG(content)
+                    fake_images = fake_images_dict['image_contents'] * mask + masked_images * (1.-mask)
+                    for i in range(label.size(0)):
+                        torchvision.utils.save_image((real_images[i]+1.)/2., "{}/categories/real/{:03d}/{}_fake_{:06d}_{:06d}_{:06d}.jpg".format(args.out_path, label[i,j].item(), args.dataset, epoch, idx, i), value_range=(0., 1.))
+                        torchvision.utils.save_image((masked_images[i]+1.)/2., "{}/categories/masked_images/{:03d}/{}_fake_{:06d}_{:06d}_{:06d}.jpg".format(args.out_path, label[i,j].item(), args.dataset, epoch, idx, i), value_range=(0., 1.))
+                        torchvision.utils.save_image(mask[i], "{}/categories/masks/{:03d}/{}_mask_{:06d}_{:06d}_{:06d}.jpg".format(args.out_path, label[i,j].item(), args.dataset, epoch, idx, i), value_range=(0., 1.))
+                        torchvision.utils.save_image((fake_images[i]+1.)/2., "{}/categories/fake_images/{:03d}/{}_fake_{:06d}_{:06d}_{:06d}.jpg".format(args.out_path, label[i,j].item(), args.dataset, epoch, idx, i), value_range=(0., 1.))
 
-                # generate images
-                content = {'image_contents': masked_images, 'mask': mask, 'label': label.squeeze(dim=-1), 'bbox': bbox, 'triples': triples}
-                fake_images_dict = netG(content)
-                fake_images = fake_images_dict['image_contents'] * mask + masked_images * (1.-mask)
-                
-                for i in range(real_images.size(0)):
-                    # torchvision.utils.save_image((fake_images[i] - torch.min(fake_images[i]))/(torch.max(fake_images[i]) - torch.min(fake_images[i])+1.e-6), "{}/samples/{}_fake_{:06d}_{:06d}_{:06d}.jpg".format(args.out_path, args.dataset, epoch, idx, i))
-                    torchvision.utils.save_image((masked_images[i]+1.)/2., "{}/masked_images/{}_fake_{:06d}_{:06d}_{:06d}.jpg".format(args.out_path, args.dataset, epoch, idx, i), value_range=(0., 1.))
-                    torchvision.utils.save_image(mask[i], "{}/masks/{}_fake_{:06d}_{:06d}_{:06d}.jpg".format(args.out_path, args.dataset, epoch, idx, i), value_range=(0., 1.))
-                    torchvision.utils.save_image((fake_images[i]+1.)/2., "{}/samples/{}_fake_{:06d}_{:06d}_{:06d}.jpg".format(args.out_path, args.dataset, epoch, idx, i), value_range=(0., 1.))
-
-                real_images = (real_images + 1.)/2.
-                fake_images = (fake_images + 1.)/2.
+                    real_images = (real_images + 1.)/2.
+                    fake_images = (fake_images + 1.)/2.
 
                 # metric check
-                test_l1 = test_l1 + torch.mean(torch.abs(real_images-fake_images))
-                test_l2 = test_l2 + torch.mean(torch.square(real_images-fake_images))
-                test_ssim = test_ssim + ssim(real_images, fake_images)
-                test_psnr = test_psnr + psnr(real_images, fake_images)
-                test_lpips = test_lpips + lpips(real_images, fake_images)
-                count = count + real_images.size(0)
-                batch_count = batch_count + 1
-
+                    test_l1 = test_l1 + torch.mean(torch.abs(real_images-fake_images))
+                    test_l2 = test_l2 + torch.mean(torch.square(real_images-fake_images))
+                    test_ssim = test_ssim + ssim(real_images, fake_images)
+                    test_psnr = test_psnr + psnr(real_images, fake_images)
+                # test_lpips = test_lpips + lpips(real_images, fake_images)
+                    count = count + real_images.size(0)
+                    batch_count = batch_count + 1
+                '''
                 real_images = 2. * F.interpolate(real_images, size=(299, 299), mode='nearest') - 1.
                 fake_images = 2. * F.interpolate(fake_images, size=(299, 299), mode='nearest') - 1.
 
@@ -163,7 +182,8 @@ def main(args):
                     temp_fake_feats, temp_ins_feat = inception_v3(fake_images)
                     fake_feats = torch.cat((fake_feats, temp_fake_feats), 0)
                     ins_feat = torch.cat((ins_feat, temp_ins_feat), 0)
-
+                
+    
     fake_feats = torch.squeeze(fake_feats)
     test_is = inception_score(ins_feat)    
     test_is_ = inception_score(ins_feat[:5000])
@@ -171,6 +191,7 @@ def main(args):
     print(torch.var_mean(fake_feats, unbiased=False))  # [0.1105, 0.3413]
     print(torch.var_mean(real_feats, unbiased=False))  # [0.1045, 0.3143]
     test_fid = compute_metric(real_feats, fake_feats)
+    '''
     print(batch_count)
     print('[*] l1: {} %'.format(100. * test_l1/(batch_count+1.e-6)))
     print('[*] l2: {} %'.format(100. * test_l2/(batch_count+1.e-6)))
@@ -214,7 +235,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     main(args)
 
-# python test_model_with_categories.py --dataset coco --data_path D:/layout2img_ours/datasets/ --out_path D:/layout2img_ours/test_tsa_v3/ --ckpt_path D:/layout2img_ours/tsa_v3/coco/128/model/G_86.pth --model_name ResnetGenerator128_inpaint_triple_v2
+# python test_model_with_categories.py --dataset coco --data_path D:/layout2img_ours/datasets/ --out_path D:/layout2img_ours/test_tsa_v3/ --ckpt_path D:/layout2img_ours/tsa_v3/coco/128/model/G_118.pth --model_name ResnetGenerator128_inpaint_triple_v2
 # python test_model_with_categories.py --dataset vg --data_path D:/layout2img_ours/datasets/ --out_path  D:/layout2img_ours/test_tsa_v3/ --ckpt_path D:/layout2img_ours/tsa_v3/vg/128/model/G_47.pth --model_name ResnetGenerator128_inpaint_triple_v2
 
 # model name list

@@ -102,7 +102,8 @@ Note 2: The data type is converted from float to uint8 when saving the image. Fo
 
 #### Task 1: Hallucinating Visual Instances with Total Absensia
 
-* Download link: [COCO] [VG]
+* Download link: [COCO 128x128](https://drive.google.com/file/d/10AFxZRvI9Q0sk5Y_pw4AoRyE3uSGrrD9/view?usp=sharing)
+* Download link: [VG 128x128](https://drive.google.com/file/d/1SL8vApyWbWp1K13nvBSvp4myE7eAg4GO/view?usp=sharing)
 
 #### Task 2: Inpainting
 

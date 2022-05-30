@@ -121,8 +121,8 @@ def main(args):
             for idx, data in enumerate(tqdm(dataloader)):
                 real_images, label, bbox, triples = data
                 real_images, label, bbox, triples = real_images.to(device), label.long().to(device).unsqueeze(-1), bbox.float(), triples.cuda()
-                erased_count = 1
-                selected_bbox, _ = torch.split(bbox, [erased_count, bbox.size(1)-1], dim=1)
+                randomly_selected = torch.randint(bbox.size(1), (1,))
+                selected_bbox = torch.unsqueeze(bbox[:,randomly_selected.item(), :], 1)
                 mask = bil.bbox2_mask(selected_bbox, real_images)  # 1 for mask, 0 for non-mask
                 mask = mask.cuda()
                 masked_images = real_images * (1.-mask)
