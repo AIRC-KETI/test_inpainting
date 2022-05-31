@@ -172,9 +172,9 @@ def main(args):
                         count[label[i,j].item()] = count[label[i,j].item()] + 1
                         batch_count = batch_count + 1
                 
+                    '''
                     real_images = 2. * F.interpolate(real_images, size=(299, 299), mode='nearest') - 1.
                     fake_images = 2. * F.interpolate(fake_images, size=(299, 299), mode='nearest') - 1.
-                    '''
                     temp_real_feats, temp_real_feats_1000 = inception_v3(torch.unsqueeze(real_images, 0))
                     temp_fake_feats, temp_fake_feats_1000 = inception_v3(torch.unsqueeze(fake_images, 0))
                     if idx == 0 and epoch == args.start_epoch:
@@ -203,24 +203,24 @@ def main(args):
         test_fid[i] = compute_metric(real_feats[i], fake_feats[i])
     '''
     for i in range(len(test_l1)):
-        print('[*] categories: {:03d}, count: {:03d}'.format(i, count[i]))
+        print('[*] categories: {:03d}, count: {}'.format(i, count[i]))
         print('[*] l1: {} %'.format(100. * test_l1[i]/(count[i]+1.e-6)))
         print('[*] l2: {} %'.format(100. * test_l2[i]/(count[i]+1.e-6)))
         print('[*] ssim: {}'.format(test_ssim[i]/(count[i]+1.e-6)))
         print('[*] psnr: {}'.format(test_psnr[i]/(count[i]+1.e-6)))
         print('[*] lpips: {}'.format(test_lpips[i]/(count[i]+1.e-6)))
-        print('[*] IS: {} {} \n'.format(test_is[i]))
-        print('[*] FID: {} \n'.format(test_fid[i]))
+        print('[*] IS: {}'.format(test_is[i]))
+        print('[*] FID: {}'.format(test_fid[i]))
 
-    f= open(args.out_path + "/quantitative_results.txt","w+")
+    f= open(args.out_path + "/categories_quantitative_results.txt","w+")
     for i in range(len(test_l1)):
-        f.write('[*] categories: {:03d}, count: {:03d}'.format(i, count[i]))
-        f.write('[*] l1: {} %\n'.format(100. * test_l1/(batch_count+1.e-6)))
-        f.write('[*] l2: {} %\n'.format(100. * test_l2/(batch_count+1.e-6)))
-        f.write('[*] ssim: {}'.format(test_ssim[i]/(count[i]+1.e-6)))
-        f.write('[*] psnr: {}'.format(test_psnr[i]/(count[i]+1.e-6)))
-        f.write('[*] lpips: {}'.format(test_lpips[i]/(count[i]+1.e-6)))
-        f.write('[*] IS: {} {} \n'.format(test_is[i]))
+        f.write('[*] categories: {:03d}, count: {:03d}\n'.format(i, count[i]))
+        f.write('[*] l1: {} %\n'.format(100. * test_l1[i]/(count[i]+1.e-6)))
+        f.write('[*] l2: {} %\n'.format(100. * test_l2[i]/(count[i]+1.e-6)))
+        f.write('[*] ssim: {}\n'.format(test_ssim[i]/(count[i]+1.e-6)))
+        f.write('[*] psnr: {}\n'.format(test_psnr[i]/(count[i]+1.e-6)))
+        f.write('[*] lpips: {}\n'.format(test_lpips[i]/(count[i]+1.e-6)))
+        f.write('[*] IS: {} \n'.format(test_is[i]))
         f.write('[*] FID: {} \n'.format(test_fid[i]))
     f.close()
 
@@ -244,7 +244,7 @@ if __name__ == "__main__":
                         help='file_name')
     parser.add_argument('--img_size', type=str, default=128,
                         help='generated image size')
-    parser.add_argument('--metric', type=str, nargs='+', default='l1 l2 ssim psnr lpips is fid')
+    # parser.add_argument('--metric', type=str, nargs='+', default='l1 l2 ssim psnr lpips is fid')
     args = parser.parse_args()
     main(args)
 
