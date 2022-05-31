@@ -98,6 +98,15 @@ Note 1: Measuring IS or FID is recommended by generating more than 50,000 sample
 
 Note 2: The data type is converted from float to uint8 when saving the image. For accurate measurement, use the [test_model.py](/test_model.py) whenever possible.
 
+## Test Model with Categories
+
+Run the test script:
+
+```bash
+python test_model_with_categories.py \
+--dataset [DATASET] --out_path [OUT_DIR] --ckpt_path [CKPT_DIR] --model_name [MODEL_NAME]
+```
+Note: This test is for hallucinating visual instances with total absensia. In coco and vg, the object corresponding to the label index defined in each task is deleted from the image, and the object is restored by inputting the index.
 
 ## Test Datasets for Various Tasks
 

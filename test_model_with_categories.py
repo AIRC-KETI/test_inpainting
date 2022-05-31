@@ -130,12 +130,13 @@ def main(args):
     logger = setup_logger("lostGAN", args.out_path, 0)
     logger.info(netG)
 
-    test_l1, test_l2, test_ssim, test_psnr, test_lpips, test_is, test_is_, test_fid = 0, 0, 0, 0, 0, 0, 0, 0
+    # test_l1, test_l2, test_ssim, test_psnr, test_lpips, test_is, test_is_, test_fid = 0, 0, 0, 0, 0, 0, 0, 0
+    test_l1, test_l2, test_ssim, test_psnr, test_lpips, test_is, test_is_, test_fid = [0]*200, [0]*200, [0]*200, [0]*200, [0]*200, [0]*200, [0]*200, [0]*200
     inception_v3 = Inceptionv3OnlyFeature().to(device)
     ssim, psnr, lpips = piq.ssim, piq.psnr, piq.LPIPS()
-    count = 0
+    count = [0]*200
     batch_count = 0
-    
+
     for epoch in range(args.start_epoch, args.total_epoch):
         netG.eval()
         with torch.no_grad():
@@ -151,64 +152,76 @@ def main(args):
                     content = {'image_contents': masked_images, 'mask': mask, 'label': label.squeeze(dim=-1), 'bbox': bbox, 'triples': triples}
                     fake_images_dict = netG(content)
                     fake_images = fake_images_dict['image_contents'] * mask + masked_images * (1.-mask)
+                    '''
                     for i in range(label.size(0)):
                         torchvision.utils.save_image((real_images[i]+1.)/2., "{}/categories/real/{:03d}/{}_fake_{:06d}_{:06d}_{:06d}.jpg".format(args.out_path, label[i,j].item(), args.dataset, epoch, idx, i), value_range=(0., 1.))
                         torchvision.utils.save_image((masked_images[i]+1.)/2., "{}/categories/masked_images/{:03d}/{}_fake_{:06d}_{:06d}_{:06d}.jpg".format(args.out_path, label[i,j].item(), args.dataset, epoch, idx, i), value_range=(0., 1.))
                         torchvision.utils.save_image(mask[i], "{}/categories/masks/{:03d}/{}_mask_{:06d}_{:06d}_{:06d}.jpg".format(args.out_path, label[i,j].item(), args.dataset, epoch, idx, i), value_range=(0., 1.))
                         torchvision.utils.save_image((fake_images[i]+1.)/2., "{}/categories/fake_images/{:03d}/{}_fake_{:06d}_{:06d}_{:06d}.jpg".format(args.out_path, label[i,j].item(), args.dataset, epoch, idx, i), value_range=(0., 1.))
-
+                    '''
                     real_images = (real_images + 1.)/2.
                     fake_images = (fake_images + 1.)/2.
 
                 # metric check
-                    test_l1 = test_l1 + torch.mean(torch.abs(real_images-fake_images))
-                    test_l2 = test_l2 + torch.mean(torch.square(real_images-fake_images))
-                    test_ssim = test_ssim + ssim(real_images, fake_images)
-                    test_psnr = test_psnr + psnr(real_images, fake_images)
-                # test_lpips = test_lpips + lpips(real_images, fake_images)
-                    count = count + real_images.size(0)
-                    batch_count = batch_count + 1
-                '''
-                real_images = 2. * F.interpolate(real_images, size=(299, 299), mode='nearest') - 1.
-                fake_images = 2. * F.interpolate(fake_images, size=(299, 299), mode='nearest') - 1.
-
-                if idx == 0 and epoch == args.start_epoch:
-                    real_feats, real_feats_1000 = inception_v3(real_images)
-                    fake_feats, ins_feat = inception_v3(fake_images)
-                else:
-                    temp_real_feats, temp_real_feats_1000 = inception_v3(real_images)
-                    real_feats = torch.cat((real_feats, temp_real_feats), 0)
-                    real_feats_1000 = torch.cat((real_feats_1000, temp_real_feats_1000), 0)
-                    temp_fake_feats, temp_ins_feat = inception_v3(fake_images)
-                    fake_feats = torch.cat((fake_feats, temp_fake_feats), 0)
-                    ins_feat = torch.cat((ins_feat, temp_ins_feat), 0)
+                    for i in range(label.size(0)):
+                        test_l1[label[i,j].item()] = test_l1[label[i,j].item()] + torch.mean(torch.abs(real_images[i]-fake_images[i]))
+                        test_l2[label[i,j].item()] = test_l2[label[i,j].item()] + torch.mean(torch.square(real_images[i]-fake_images[i]))
+                        test_ssim[label[i,j].item()] = test_ssim[label[i,j].item()] + ssim(torch.unsqueeze(real_images[i], 0), torch.unsqueeze(fake_images[i], 0))
+                        test_psnr[label[i,j].item()] = test_psnr[label[i,j].item()] + psnr(torch.unsqueeze(real_images[i], 0), torch.unsqueeze(fake_images[i], 0))
+                        test_lpips[label[i,j].item()] = test_lpips[label[i,j].item()] + lpips(torch.unsqueeze(real_images[i], 0), torch.unsqueeze(fake_images[i], 0))
+                        count[label[i,j].item()] = count[label[i,j].item()] + 1
+                        batch_count = batch_count + 1
                 
-    
-    fake_feats = torch.squeeze(fake_feats)
-    test_is = inception_score(ins_feat)    
-    test_is_ = inception_score(ins_feat[:5000])
-    real_feats = torch.squeeze(real_feats)
-    print(torch.var_mean(fake_feats, unbiased=False))  # [0.1105, 0.3413]
-    print(torch.var_mean(real_feats, unbiased=False))  # [0.1045, 0.3143]
-    test_fid = compute_metric(real_feats, fake_feats)
+                    real_images = 2. * F.interpolate(real_images, size=(299, 299), mode='nearest') - 1.
+                    fake_images = 2. * F.interpolate(fake_images, size=(299, 299), mode='nearest') - 1.
+                    '''
+                    temp_real_feats, temp_real_feats_1000 = inception_v3(torch.unsqueeze(real_images, 0))
+                    temp_fake_feats, temp_fake_feats_1000 = inception_v3(torch.unsqueeze(fake_images, 0))
+                    if idx == 0 and epoch == args.start_epoch:
+                        real_feats, fake_feats = [torch.zeros(1, 2048)]*200, [torch.zeros(1, 2048)]*200
+                        real_feats_1000, fake_feats_1000 = [torch.zeros(1, 1000)]*200, [torch.zeros(1, 1000)]*200
+
+                    for i in range(label.size(0)):
+                        temp_real_feats, temp_real_feats_1000 = inception_v3(torch.unsqueeze(real_images[i], 0))
+                        temp_real_feats = torch.squeeze(torch.squeeze(temp_real_feats, -1), -1)
+                        temp_real_feats_1000 = torch.squeeze(torch.squeeze(temp_real_feats_1000, -1), -1)
+                        real_feats[label[i, j].item()] = torch.cat((real_feats[label[i, j].item()], temp_real_feats.cpu()), 0)
+                        real_feats_1000[label[i, j].item()] = torch.cat((real_feats_1000[label[i, j].item()], temp_real_feats_1000.cpu()), 0)
+                        
+                        temp_fake_feats, temp_fake_feats_1000 = inception_v3(torch.unsqueeze(fake_images[i], 0))
+                        temp_fake_feats = torch.squeeze(torch.squeeze(temp_fake_feats, -1), -1)
+                        temp_fake_feats_1000 = torch.squeeze(torch.squeeze(temp_fake_feats_1000, -1), -1)
+                        fake_feats[label[i, j].item()] = torch.cat((fake_feats[label[i, j].item()], temp_fake_feats.cpu()), 0)
+                        fake_feats_1000[label[i, j].item()] = torch.cat((fake_feats_1000[label[i, j].item()], temp_fake_feats_1000.cpu()), 0)
+                    '''
+
+    # fake_feats = torch.squeeze(fake_feats)
+    # test_is = inception_score(ins_feat)    
     '''
-    print(batch_count)
-    print('[*] l1: {} %'.format(100. * test_l1/(batch_count+1.e-6)))
-    print('[*] l2: {} %'.format(100. * test_l2/(batch_count+1.e-6)))
-    print('[*] ssim: {}'.format(test_ssim/(batch_count+1.e-6)))
-    print('[*] psnr: {}'.format(test_psnr/(batch_count+1.e-6)))
-    print('[*] lpips: {}'.format(test_lpips/(batch_count+1.e-6)))
-    print('[*] IS: {} {} \n'.format(test_is, test_is_))
-    print('[*] FID: {} \n'.format(test_fid))
+    for i in range(len(test_is)):
+        test_is_[i] = inception_score(fake_feats_1000[i][:5000])
+        test_fid[i] = compute_metric(real_feats[i], fake_feats[i])
+    '''
+    for i in range(len(test_l1)):
+        print('[*] categories: {:03d}, count: {:03d}'.format(i, count[i]))
+        print('[*] l1: {} %'.format(100. * test_l1[i]/(count[i]+1.e-6)))
+        print('[*] l2: {} %'.format(100. * test_l2[i]/(count[i]+1.e-6)))
+        print('[*] ssim: {}'.format(test_ssim[i]/(count[i]+1.e-6)))
+        print('[*] psnr: {}'.format(test_psnr[i]/(count[i]+1.e-6)))
+        print('[*] lpips: {}'.format(test_lpips[i]/(count[i]+1.e-6)))
+        print('[*] IS: {} {} \n'.format(test_is[i]))
+        print('[*] FID: {} \n'.format(test_fid[i]))
 
     f= open(args.out_path + "/quantitative_results.txt","w+")
-    f.write('[*] l1: {} %\n'.format(100. * test_l1/(batch_count+1.e-6)))
-    f.write('[*] l2: {} %\n'.format(100. * test_l2/(batch_count+1.e-6)))
-    f.write('[*] ssim: {} \n'.format(test_ssim/(batch_count+1.e-6)))
-    f.write('[*] psnr: {} \n'.format(test_psnr/(batch_count+1.e-6)))
-    f.write('[*] lpips: {} \n'.format(test_lpips/(batch_count+1.e-6)))
-    f.write('[*] IS: {} \n'.format(test_is))
-    f.write('[*] FID: {} \n'.format(test_fid))
+    for i in range(len(test_l1)):
+        f.write('[*] categories: {:03d}, count: {:03d}'.format(i, count[i]))
+        f.write('[*] l1: {} %\n'.format(100. * test_l1/(batch_count+1.e-6)))
+        f.write('[*] l2: {} %\n'.format(100. * test_l2/(batch_count+1.e-6)))
+        f.write('[*] ssim: {}'.format(test_ssim[i]/(count[i]+1.e-6)))
+        f.write('[*] psnr: {}'.format(test_psnr[i]/(count[i]+1.e-6)))
+        f.write('[*] lpips: {}'.format(test_lpips[i]/(count[i]+1.e-6)))
+        f.write('[*] IS: {} {} \n'.format(test_is[i]))
+        f.write('[*] FID: {} \n'.format(test_fid[i]))
     f.close()
 
 if __name__ == "__main__":
@@ -243,52 +256,3 @@ if __name__ == "__main__":
 # ResnetGenerator128_inpaint_subject
 
 # python test_model.py --dataset coco --data_path D:/layout2img_ours/datasets/ --out_path D:/layout2img_ours/subject_only/ --ckpt_path D:/layout2img_ours/subject_only/coco/128/model/G_181.pth --model_name ResnetGenerator128_inpaint_subject
-
-    '''
-    print('[*] l1: {} %'.format(100. * test_l1/(batch_count+1.e-6)))
-    print('[*] l2: {} %'.format(100. * test_l2/(batch_count+1.e-6)))
-    print('[*] ssim: {}'.format(test_ssim/(batch_count+1.e-6)))
-    print('[*] psnr: {}'.format(test_psnr/(batch_count+1.e-6)))
-    print('[*] lpips: {}'.format(test_lpips/(batch_count+1.e-6)))
-    
-    fake_dir = '{}/samples/'.format(args.out_path)
-    if args.dataset == "coco":
-        real_dataset = ImageOnlyDataset(args.data_path + './coco/val2017/',
-                                    instances_json=args.data_path+'./coco/annotations/instances_val2017.json',
-                                    stuff_json=args.data_path+'./coco/annotations/stuff_val2017.json', image_size=(128, 128), left_right_flip=False)
-    elif args.dataset == 'vg':
-        real_dataset = ImageOnlyDatasetVG(vocab_json=args.data_path+'./vg/vocab.json', h5_path=args.data_path+'./vg/test.h5',
-                                   image_dir=args.data_path+'./vg/images/',
-                                   image_size=(img_size, img_size), max_objects=7, left_right_flip=False)
-    
-    fake_dataset = ImageOnlyDataset(fake_dir, image_size=(299, 299), left_right_flip=False)
-    
-    real_dataloader = torch.utils.data.DataLoader(
-        real_dataset, batch_size=args.batch_size,
-        drop_last=False, shuffle=False, num_workers=num_workers)
-
-    fake_dataloader = torch.utils.data.DataLoader(
-        fake_dataset, batch_size=args.batch_size,
-        drop_last=False, shuffle=False, num_workers=num_workers)
-
-    with torch.no_grad():
-        for idx, data in enumerate(tqdm(fake_dataloader)):
-            images = data['images'].to(device)
-            if idx == 0:
-                fake_feats, ins_feat = inception_v3(images)
-            else:
-                temp_fake_feats, temp_ins_feat = inception_v3(images)
-                fake_feats = torch.cat((fake_feats, temp_fake_feats), 0)
-                ins_feat = torch.cat((ins_feat, temp_ins_feat), 0)
-    
-    with torch.no_grad():
-        for idx, data in enumerate(tqdm(real_dataloader)):
-            images = data['images'].to(device)
-            images = F.interpolate(images, size=(299, 299), mode='nearest')
-            if idx == 0:
-                real_feats, real_feats_1000 = inception_v3(images)
-            else:
-                temp_real_feats, temp_real_feats_1000 = inception_v3(images)
-                real_feats = torch.cat((real_feats, temp_real_feats), 0)
-                real_feats_1000 = torch.cat((real_feats_1000, temp_real_feats_1000), 0)
-    '''
