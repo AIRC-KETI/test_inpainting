@@ -151,8 +151,7 @@ def masks_to_layout(boxes, masks, H, W=None):
         W = H
 
     grid = _boxes_to_grid(boxes.view(b*num_o, -1), H, W).float().cuda(device=masks.device)
-
-    img_in = masks.float().view(b*num_o, 1, M, M)
+    img_in = masks.float().contiguous().view(b*num_o, 1, M, M)
     sampled = F.grid_sample(img_in, grid, mode='bilinear')
 
     return sampled.view(b, num_o, H, W)

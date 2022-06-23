@@ -10,5 +10,5 @@ tqdm
 piq
 h5py 
 six
-pytorch
+torch
 torchvision

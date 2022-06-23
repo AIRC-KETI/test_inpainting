@@ -18,6 +18,7 @@ from utils.save_image import *
 from data.cocostuff_loader_my import *
 from data.vg_direction import *
 from model.resnet_generator_app_v2 import *
+from model.generator_my import *
 from data.image_only_loader import *
 import model.vis as vis
 from imageio import imwrite
@@ -33,13 +34,13 @@ import piq
 
 def get_dataset(dataset, my_path, img_size):
     if dataset == "coco":
-        data = CocoSceneGraphDataset(image_dir=my_path+'./coco/val2017/',
-                                     instances_json=my_path+'./coco/annotations/instances_val2017.json',
-                                     stuff_json=my_path+'./coco/annotations/stuff_val2017.json',
+        data = CocoSceneGraphDataset(image_dir=my_path+'/coco/val2017/',
+                                     instances_json=my_path+'/coco/annotations/instances_val2017.json',
+                                     stuff_json=my_path+'/coco/annotations/stuff_val2017.json',
                                      stuff_only=True, image_size=(img_size, img_size), left_right_flip=False)
     elif dataset == 'vg':
-        data = VgSceneGraphDataset(vocab_json=my_path+'./vg/vocab.json', h5_path=my_path+'./vg/test.h5',
-                                   image_dir=my_path+'./vg/images/',
+        data = VgSceneGraphDataset(vocab_json=my_path+'/vg/vocab.json', h5_path=my_path+'/vg/test.h5',
+                                   image_dir=my_path+'/vg/images/',
                                    image_size=(img_size, img_size), max_objects=7, left_right_flip=False)
     return data
 
@@ -54,6 +55,7 @@ def main(args):
     args.out_path = os.path.join(args.out_path, args.dataset, str(args.img_size))
 
     num_gpus = torch.cuda.device_count()
+    print(num_gpus)
     num_workers = 2
     if num_gpus > 1:
         parallel = True
@@ -86,8 +88,7 @@ def main(args):
     model_dict.update(pretrained_dict)
     netG.load_state_dict(model_dict)
     netG.to(device)
-    
-    parallel = True
+
     if parallel:
         netG = DataParallelWithCallback(netG)
 
@@ -194,7 +195,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str, default='coco',
                         help='training dataset')
-    parser.add_argument('--data_path', type=str, default='./dataset',
+    parser.add_argument('--data_path', type=str, default='./datasets',
                         help='path to dataset')
     parser.add_argument('--batch_size', type=int, default=64,
                         help='mini-batch size of training data. Default: 16')
