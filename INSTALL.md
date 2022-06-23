@@ -13,7 +13,7 @@
 * piq
 * h5py 
 * six
-* pytorch
+* torch
 * torchvision
 ```
 pip install -r requiements.txt
