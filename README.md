@@ -71,6 +71,15 @@ python test_model_with_categories.py \
 Note: This test is for hallucinating visual instances with partial absentia.
 In coco and vg, the object corresponding to the label index defined in each task is deleted from the image, and the object is restored by input index.
 
+## Visualizing Qualitative Comparisons
+
+Run the test script:
+
+```bash
+python test_models.py \
+--dataset [DATASET] --out_path [OUT_DIR] --ckpt_path [CKPT_DIR] --model_name [MODEL_NAME]
+```
+
 ## Test Datasets for Various Tasks
 
 ### Task 1: Hallucinating Visual Instances with Parital Absentia (HVIPA)
@@ -85,6 +94,8 @@ Real | Rect mask | Rect masked image | Segmentation mask | Segmentation masked i
 :---:|:---:|:---:|:---:|:---:
 ![](./readme_asset/000000_252219_real.jpg) | ![](./readme_asset/000000_252219_rect_mask.jpg) | ![](./readme_asset/000000_252219_rect_masked_image.jpg) | ![](./readme_asset/000000_252219_seg_mask.jpg) | ![](./readme_asset/000000_252219_seg_masked_image.jpg)
 
+* Download Link (Google Drive)
+
 | Remain ratio     |   50  |   45  |   40  |   20  |   0 (HVITA)*  |
 |:----------------:|:-----:|:-----:|:-----:|:-----:|:--------------:|
 | COCO             | [COCO_50](https://drive.google.com/file/d/1jdsiFTPUJy6PPPmCJZTJ3u-y1LRY0ptp/view?usp=sharing) | [COCO_45](https://drive.google.com/file/d/1y7tzmoSyoGgDm6EwUtYfGUyzyILc-gwz/view?usp=sharing) | [COCO_40](https://drive.google.com/file/d/1kswCnfLU3WuRrWfXc-9B8tn1I38a-niF/view?usp=sharing) | [COCO_20](https://drive.google.com/file/d/1fV2yRtzyCjXm7_vxWkanHsRSbPt850va/view?usp=sharing) | [COCO_00](https://drive.google.com/file/d/1vjlXbsG7k1jHuP_soqDi9HAXqhT5u4OF/view?usp=sharing) |
@@ -97,6 +108,8 @@ Real | Rect mask | Rect masked image | Segmentation mask | Segmentation masked i
 
 This task aims to restore two or more objects when it has been partially or completely erased from the image.
 
+* Download Link (Google Drive)
+
 | erased count     |   2  |   3  |   4  |
 |:----------------:|:-----:|:-----:|:-----:|
 | COCO             | [COCO_multiple_2](https://drive.google.com/file/d/1p2ZClK6oZA--gk_JAIC6lHVJqlFGRhLL/view?usp=sharing) | [COCO_multiple_3](https://drive.google.com/file/d/1gctxCZty4pTWP2duQKOc5I3CQY-3pBSo/view?usp=sharing) | [COCO_multiple_4](https://drive.google.com/file/d/11qQKtWlZ2Zdqi2wcmSJ1WFLkUKoIPOjJ/view?usp=sharing)|
@@ -105,6 +118,8 @@ This task aims to restore two or more objects when it has been partially or comp
 ### Task 3: Hallucinating Objects using Semantic Triples (HOST) 
 
 This task aims to restore objects by using semantic triples.
+
+* Download Link (Google Drive)
 
 | erased count     |   1  |
 |:----------------:|:-----:|
@@ -125,7 +140,7 @@ This task aims to restore objects by using semantic triples.
 Note: A set of random tests mixed with a random rectangular mask or a mask in which the object is completely absent.
 
 ```bash
-{data}_{resolution}_hvita
+{data}_{task}
 ├── real
 │   ├── 000
 │   │   ├── xxxxxx.jpg
