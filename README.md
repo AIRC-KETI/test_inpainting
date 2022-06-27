@@ -47,45 +47,7 @@ python test_model.py \
 ```
 #### Note for test your own model
 
-1. Your own model should be in: 
-```bash
-${ROOT}
-├── data
-├── model
-    └── [your model.py]
-├── model_layout2img
-├── scripts
-├── utils
-├── utils_layout2img
-├── INSTALL.md
-├── README.md
-├── requirements.txt
-├── test_model.py
-└── test_samples.py
-```
-
-2. test model should get two or more input with 'dict' type content
-
-| key                | type      | range                 | shape              | descrption                                    |
-|--------------------|-----------|-----------------------|--------------------|-----------------------------------------------|
-| image_contents     | float     | [-1, 1]                | [Height,Width, 3]  | masked input (gray color)                     |
-| mask               | float,int | [0, 1]                | [Height, Width, 1] | mask(1 to mask in each pixel)                 |
-| label (optional)   | int       | [0, # of label index) | [# of objects]     | object index (defined in each dataset)        |
-| bbox (optional)    | float     | [0, 1]                | [# of objects, 4]  | bound box with (x, y, w, h) relative position |
-| triples (optional) | int       | [0,# of triples)      | [# of triples, 3]  | triples (index defined in each dataset)       |
-
-3. The result of the model should also be output in the form of a dict.
-
-| key                | type      | range                 | shape              | descrption                                    |
-|--------------------|-----------|-----------------------|--------------------|-----------------------------------------------|
-| image_contents     | float     | [-1,1]                | [Height,Width, 3]  |inpaintied results                     |
-
-### Model List
-- [X] TripleLostGAN (Ours)
-- [X] LostGAN
-- [ ] CAL2IM
-- [ ] CIAFILL
-- [ ] Hyein et al.
+please see [TEST.md](TEST.md).
 
 ## Test Samples
 
@@ -106,11 +68,12 @@ Run the test script:
 python test_model_with_categories.py \
 --dataset [DATASET] --out_path [OUT_DIR] --ckpt_path [CKPT_DIR] --model_name [MODEL_NAME]
 ```
-Note: This test is for hallucinating visual instances with potal absensia. In coco and vg, the object corresponding to the label index defined in each task is deleted from the image, and the object is restored by inputting the index.
+Note: This test is for hallucinating visual instances with partial absentia.
+In coco and vg, the object corresponding to the label index defined in each task is deleted from the image, and the object is restored by input index.
 
 ## Test Datasets for Various Tasks
 
-#### Task 1: Hallucinating Visual Instances with Parital Absentia (HVIPA)
+### Task 1: Hallucinating Visual Instances with Parital Absentia (HVIPA)
 
 This task aims to restore an object when it has been partially or completely erased from the image.
 
@@ -124,10 +87,42 @@ Real | Rect mask | Rect masked image | Segmentation mask | Segmentation masked i
 
 | Remain ratio     |   50  |   45  |   40  |   20  |   0 (HVITA)*  |
 |:----------------:|:-----:|:-----:|:-----:|:-----:|:--------------:|
-| COCO             | [COCO_50](https://drive.google.com/file/d/1jdsiFTPUJy6PPPmCJZTJ3u-y1LRY0ptp/view?usp=sharing) | [COCO_45](https://drive.google.com/file/d/1y7tzmoSyoGgDm6EwUtYfGUyzyILc-gwz/view?usp=sharing) | ![]() | ![]() | [COCO_00](https://drive.google.com/file/d/1vjlXbsG7k1jHuP_soqDi9HAXqhT5u4OF/view?usp=sharing) |
-| Visual Genome    | [VG_50](https://drive.google.com/file/d/1rG7X9fGa9tptoBBgrSh7fxnLtRFdarH1/view?usp=sharing) | [VG_45](https://drive.google.com/file/d/1gdEn_Gf-3UiAq7dyjPghGpNhhRc2883_/view?usp=sharing) | [VG_40](https://drive.google.com/file/d/1Ca9nl7VfIo4KHl42yWqlNSUkJAowwB0Q/view?usp=sharing) | ![]() | [VG_00](https://drive.google.com/file/d/1om43Uwyynpx2wkPexyhjmUt4Uja_35Dt/view?usp=sharing) |
+| COCO             | [COCO_50](https://drive.google.com/file/d/1jdsiFTPUJy6PPPmCJZTJ3u-y1LRY0ptp/view?usp=sharing) | [COCO_45](https://drive.google.com/file/d/1y7tzmoSyoGgDm6EwUtYfGUyzyILc-gwz/view?usp=sharing) | [COCO_40](https://drive.google.com/file/d/1kswCnfLU3WuRrWfXc-9B8tn1I38a-niF/view?usp=sharing) | [COCO_20](https://drive.google.com/file/d/1fV2yRtzyCjXm7_vxWkanHsRSbPt850va/view?usp=sharing) | [COCO_00](https://drive.google.com/file/d/1vjlXbsG7k1jHuP_soqDi9HAXqhT5u4OF/view?usp=sharing) |
+| Visual Genome    | [VG_50](https://drive.google.com/file/d/1rG7X9fGa9tptoBBgrSh7fxnLtRFdarH1/view?usp=sharing) | [VG_45](https://drive.google.com/file/d/1gdEn_Gf-3UiAq7dyjPghGpNhhRc2883_/view?usp=sharing) | [VG_40](https://drive.google.com/file/d/1Ca9nl7VfIo4KHl42yWqlNSUkJAowwB0Q/view?usp=sharing) | [VG_20](https://drive.google.com/file/d/1tlIryZTfWLAbSRB6Q-5XUF__jehYi3pJ/view?usp=sharing) | [VG_00](https://drive.google.com/file/d/1om43Uwyynpx2wkPexyhjmUt4Uja_35Dt/view?usp=sharing) |
 
 * HVITA*: Hallucinating Visual Instances with 'Total' Absensia
+
+
+### Task 2: Hallucinating Multiple Instances with Total Absentia (HMITA) 
+
+This task aims to restore two or more objects when it has been partially or completely erased from the image.
+
+| erased count     |   2  |   3  |   4  |
+|:----------------:|:-----:|:-----:|:-----:|
+| COCO             | [COCO_multiple_2](https://drive.google.com/file/d/1p2ZClK6oZA--gk_JAIC6lHVJqlFGRhLL/view?usp=sharing) | [COCO_multiple_3](https://drive.google.com/file/d/1gctxCZty4pTWP2duQKOc5I3CQY-3pBSo/view?usp=sharing) | [COCO_multiple_4](https://drive.google.com/file/d/11qQKtWlZ2Zdqi2wcmSJ1WFLkUKoIPOjJ/view?usp=sharing)|
+| Visual Genome    | [VG_multiple_2](https://drive.google.com/file/d/1pqiRP43iRaGouZSNrQH1mxhk2Xjj7HZI/view?usp=sharing)| [VG_multiple_3](https://drive.google.com/file/d/1p4DEHt7QpXFBk5gQthRf0AU20xF5Tt15/view?usp=sharing)| [VG_multiple_4](https://drive.google.com/file/d/1dshKJ854CVgE1vVXdix8ZfjykDR4fH21/view?usp=sharing)|
+
+### Task 3: Hallucinating Objects using Semantic Triples (HOST) 
+
+This task aims to restore objects by using semantic triples.
+
+| erased count     |   1  |
+|:----------------:|:-----:|
+| COCO             | [COCO_triple_1](https://drive.google.com/file/d/1-oTAcG5vv9iCrtvnIg2QDfvCRcpNSWe-/view?usp=sharing)|
+| Visual Genome    | [VG_triple_1](https://drive.google.com/file/d/1jr_zJDMTU2CuA8V2TfZO7IHsQwjZHsw8/view?usp=sharing)|
+
+### Task 4: Inpainting
+
+* Download link: [Places2](http://places2.csail.mit.edu/download.html)
+* Download link:  [CelebA-HQ](https://drive.google.com/drive/folders/0B4qLcYyJmiz0TXY1NG02bzZVRGs?resourcekey=0-arAVTUfW9KRhN-irJchVKQ)
+* Download link:  [IrregularMask](https://www.dropbox.com/s/01dfayns9s0kevy/test_mask.zip?dl=0)
+
+### Task 4: HVITA+Inpainting
+
+* Download link: [COCO 128x128](https://drive.google.com/file/d/11xapK9GCIP-iZuvn8julofitQ_EPpNbh/view?usp=sharing)
+* Download link: [VG 128x128](https://drive.google.com/file/d/1ONn3-sABfuFhjZj81X3VQqHvV-24ShuY/view?usp=sharing)
+
+Note: A set of random tests mixed with a random rectangular mask or a mask in which the object is completely absent.
 
 ```bash
 {data}_{resolution}_hvita
@@ -182,30 +177,6 @@ Real | Rect mask | Rect masked image | Segmentation mask | Segmentation masked i
     │   └── ...       
     └── ...(the last index number)
 ```
-
-#### Task 2: Hallucinating Multiple instances with partial Absentia 
-
-This task aims to restore two or more objects when it has been partially or completely erased from the image.
-
-The smaller the remaining ratio, the higher the percentage of objects erased.
-
-| Remain ratio     |   50  |   45  |   40  |   20  |   0 (HVITA)*  |
-|:----------------:|:-----:|:-----:|:-----:|:-----:|:--------------:|
-| COCO             | [COCO_50](https://drive.google.com/file/d/1jdsiFTPUJy6PPPmCJZTJ3u-y1LRY0ptp/view?usp=sharing) | [COCO_45](https://drive.google.com/file/d/1y7tzmoSyoGgDm6EwUtYfGUyzyILc-gwz/view?usp=sharing) | ![]() | ![]() | [COCO_00](https://drive.google.com/file/d/1vjlXbsG7k1jHuP_soqDi9HAXqhT5u4OF/view?usp=sharing) |
-| Visual Genome    | [VG_50](https://drive.google.com/file/d/1rG7X9fGa9tptoBBgrSh7fxnLtRFdarH1/view?usp=sharing) | [VG_45](https://drive.google.com/file/d/1gdEn_Gf-3UiAq7dyjPghGpNhhRc2883_/view?usp=sharing) | [VG_40](https://drive.google.com/file/d/1Ca9nl7VfIo4KHl42yWqlNSUkJAowwB0Q/view?usp=sharing) | ![]() | [VG_00](https://drive.google.com/file/d/1om43Uwyynpx2wkPexyhjmUt4Uja_35Dt/view?usp=sharing) |
-
-#### Task 3: Inpainting
-
-* Download link: [Places2](http://places2.csail.mit.edu/download.html)
-* Download link:  [CelebA-HQ](https://drive.google.com/drive/folders/0B4qLcYyJmiz0TXY1NG02bzZVRGs?resourcekey=0-arAVTUfW9KRhN-irJchVKQ)
-* Download link:  [IrregularMask](https://www.dropbox.com/s/01dfayns9s0kevy/test_mask.zip?dl=0)
-
-#### Task 4: HVITA+Inpainting
-
-* Download link: [COCO 128x128](https://drive.google.com/file/d/11xapK9GCIP-iZuvn8julofitQ_EPpNbh/view?usp=sharing)
-* Download link: [VG 128x128](https://drive.google.com/file/d/1ONn3-sABfuFhjZj81X3VQqHvV-24ShuY/view?usp=sharing)
-
-Note: A set of random tests mixed with a random rectangular mask or a mask in which the object is completely absent.
 
 ## Reference
 If you find this repo helpful, please consider citing:

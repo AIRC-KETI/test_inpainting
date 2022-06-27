@@ -33,16 +33,16 @@ import piq
 
 
 def main(args):
-    # parameters
-    z_dim = 128
-    pred_classes = 7 if args.dataset == 'coco' else 7
-    num_classes = 184 if args.dataset == 'coco' else 179
-    num_obj = 8 if args.dataset == 'coco' else 8
-
-    if args.ratio < 1.e-6:
+    if args.ratio < 1.e-6 and args.obj_count == 1 and args.group != 'triple':
         args.out_path = os.path.join(args.out_path, args.dataset)
-    else:
+    elif args.group == 'triple':
+        args.out_path = os.path.join(args.out_path, args.dataset + '_triple_' + str(int(args.obj_count)))
+    elif args.obj_count == 1 and args.group != 'triple':
         args.out_path = os.path.join(args.out_path, args.dataset+'_'+str(int(100*args.ratio))+'_'+args.direction)
+    elif args.obj_count > 1:
+        args.out_path = os.path.join(args.out_path, args.dataset+'_multiple_'+str(int(args.obj_count)))
+    else:
+        args.out_path = os.path.join(args.out_path, args.dataset)
     num_gpus = torch.cuda.device_count()
     num_workers = 2
     if num_gpus > 1:
@@ -53,16 +53,19 @@ def main(args):
 
     # data loader
     device = torch.device('cuda')
+    print(args.out_path)
     if not os.path.exists(args.out_path):
         os.makedirs(args.out_path)
     if not os.path.exists(os.path.join(args.out_path, 'real/')):
         os.makedirs(os.path.join(args.out_path, 'real/'))
-    if not os.path.exists(os.path.join(args.out_path, 'real/')):
-        os.makedirs(os.path.join(args.out_path, 'real/'))
-    if not os.path.exists(os.path.join(args.out_path, 'real/')):
-        os.makedirs(os.path.join(args.out_path, 'real/'))
-    if not os.path.exists(os.path.join(args.out_path, 'samples/')):
-        os.makedirs(os.path.join(args.out_path, 'samples/'))
+    if not os.path.exists(os.path.join(args.out_path, 'seg_masked_image/')):
+        os.makedirs(os.path.join(args.out_path, 'seg_masked_image/'))
+    if not os.path.exists(os.path.join(args.out_path, 'rect_masked_image/')):
+        os.makedirs(os.path.join(args.out_path, 'rect_masked_image/'))
+    if not os.path.exists(os.path.join(args.out_path, 'seg_mask/')):
+        os.makedirs(os.path.join(args.out_path, 'seg_mask/'))
+    if not os.path.exists(os.path.join(args.out_path, 'rect_mask/')):
+        os.makedirs(os.path.join(args.out_path, 'rect_mask/'))
     if not os.path.exists(os.path.join(args.out_path, 'categories/')):
         os.makedirs(os.path.join(args.out_path, 'categories/'))
     if not os.path.exists(os.path.join(args.out_path, 'categories/real')):
@@ -107,8 +110,11 @@ def main(args):
 
 def process_mask(idx, data, args):
     obj = data['objs']
-    for i in range(obj.size(1)):  # box, image, mask, idx
-        save_mask(idx, data, args, i)
+    if args.obj_count == 1 and args.group != 'triple':
+        for i in range(obj.size(1)):  # box, image, mask, idx
+            save_mask(idx, data, args, i)
+    else:
+        save_multiple_mask(idx, data, args)
 
 
 def save_mask(idx, data, args, i):
@@ -117,10 +123,12 @@ def save_mask(idx, data, args, i):
     box = data['boxes']
     if args.dataset == 'coco':
         mask = data['masks']
+        mmask = torch.unsqueeze(mask[:, i, :, :], 1).type(torch.FloatTensor)
     else:
         mask = data['images']
+        mmask = mask
     bbox = torch.unsqueeze(box[:, i, :], 1)
-    mmask = torch.unsqueeze(mask[:, i, :, :], 1).type(torch.FloatTensor)
+
     rect_mask = make_mask(bbox, image, mmask, args, is_rect=True)
     rect_hvita = image * (1. - rect_mask) + 0.5 * rect_mask
 
@@ -146,6 +154,88 @@ def save_mask(idx, data, args, i):
     torchvision.utils.save_image(rect_mask,
                                  "{}/categories/rect_mask/{:03d}/{:06d}_{}.jpg".format(
                                      args.out_path, obj[0, i].item(), idx, name))
+
+
+def save_multiple_mask(idx, data, args):
+    image = data['images']
+    obj = data['objs']
+    box = data['boxes']
+    triple = data['triples']
+    if args.dataset == 'coco':
+        mask = data['masks']
+    else:
+        mask = data['images']
+
+    if args.group == 'random':
+        obj_list = list(range(0, obj.size(1)))
+        obj_list = [x for x in obj_list if (obj[:,x].item() != 0)]
+        obj_count = args.obj_count
+        if args.obj_count > len(obj_list):
+            obj_count = len(obj_list)
+        selected_list = random.sample(obj_list, obj_count)
+    else:
+        s, p, o = triple.chunk(3, dim=-1)  # [B,# of triples, 1]
+        s, p, o = [x.squeeze(-1) for x in [s, p, o]]  # [B, # of triples]
+        s_obj = torch.gather(obj, -1, s)
+        o_obj = torch.gather(obj, -1, o)
+        sel_triple = []
+        for i in range(s_obj.size(1)):
+            if s_obj[:,i] != 0 and o_obj[:,i] != 0:
+                sel_triple.append([s[:,i], o[:,i]])
+
+        obj_count = args.obj_count
+        if args.obj_count > len(sel_triple):
+            obj_count = len(sel_triple)
+        selected_list = random.sample(sel_triple, obj_count)
+        selected_list = [x for xs in selected_list for x in xs]
+    rect_mask = torch.zeros(image.size(0), 1, image.size(-2), image.size(-1))
+
+    for i in selected_list:
+        if args.group == 'random':
+            bbox = torch.unsqueeze(box[:, i, :], 1)
+        else:
+            bbox = box[:, i, :]
+        mmask = mask
+        rect_mask = rect_mask + make_mask(bbox, image, mmask, args, is_rect=True)
+
+    rect_mask = torch.minimum(rect_mask, torch.ones_like(rect_mask))
+    rect_hvita = image * (1. - rect_mask) + 0.5 * rect_mask
+
+    if args.dataset == 'coco':
+        seg_mask = torch.zeros(image.size(0), 1, image.size(-2), image.size(-1))
+        for i in selected_list:
+            if args.group == 'random':
+                bbox = torch.unsqueeze(box[:, i, :], 1)
+            else:
+                bbox = box[:, i, :]
+            if args.group == 'random':
+                mmask = torch.unsqueeze(mask[:, i, :, :], 1).type(torch.FloatTensor)
+            else:
+                mmask = mask[:, i, :, :].type(torch.FloatTensor)
+
+            seg_mask = seg_mask + make_mask(bbox, image, mmask, args, is_rect=False)
+
+        seg_mask = torch.minimum(seg_mask, torch.ones_like(seg_mask))
+        seg_hvita = image * (1. - seg_mask) + 0.5 * seg_mask
+
+    name = "{:06d}".format(data['image_id'].item()) if args.dataset == 'coco' else str(data['image_id']).replace(
+        "\\", "_").replace(".jpg", "")
+    torchvision.utils.save_image(image,
+                                 "{}/real/{}_{:06d}_{}.jpg".format(
+                                     args.out_path, str([obj[0,x].item() for x in selected_list]), idx, name))
+    torchvision.utils.save_image(rect_hvita,
+                                 "{}/rect_masked_image/{}_{:06d}_{}.jpg".format(
+                                     args.out_path, str([obj[0, x].item() for x in selected_list]), idx, name))
+    torchvision.utils.save_image(rect_mask,
+                                 "{}/rect_mask/{}_{:06d}_{}.jpg".format(
+                                     args.out_path, str([obj[0, x].item() for x in selected_list]), idx, name))
+    if args.dataset == 'coco':
+        torchvision.utils.save_image(seg_hvita,
+                                     "{}/seg_masked_image/{}_{:06d}_{}.jpg".format(
+                                         args.out_path, str([obj[0, x].item() for x in selected_list]), idx, name))
+        torchvision.utils.save_image(seg_mask,
+                                     "{}/seg_mask/{}_{:06d}_{}.jpg".format(
+                                         args.out_path, str([obj[0, x].item() for x in selected_list]), idx, name))
 
 
 def make_mask(box, image, mask, args, is_rect=True):
@@ -247,7 +337,11 @@ if __name__ == "__main__":
     parser.add_argument('--direction', type=str, default='left',
                         choices=['left', 'right', 'upper', 'below'],
                         help='where the parts were deleted from the image')
-
+    parser.add_argument('--obj_count', type=int, default=1,
+                        help='# of erased objects')
+    parser.add_argument('--group', type=str, default='random',
+                        choices=['random', 'triple'],
+                        help='# of erased objects')
     args = parser.parse_args()
     main(args)
 
