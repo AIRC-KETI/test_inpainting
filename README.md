@@ -116,18 +116,18 @@ This task aims to restore an object when it has been partially or completely era
 
 The smaller the remaining ratio, the higher the percentage of objects erased.
 
+* Example
+
+Real | Rect mask | Rect masked image | Segmentation mask | Segmentation masked image
+:---:|:---:|:---:|:---:|:---:
+![](./readme_asset/000000_252219_real.jpg) | ![](./readme_asset/000000_252219_rect_mask.jpg) | ![](./readme_asset/000000_252219_rect_masked_image.jpg) | ![](./readme_asset/000000_252219_seg_mask.jpg) | ![](./readme_asset/000000_252219_seg_masked_image.jpg)
+
 | Remain ratio     |   50  |   45  |   40  |   20  |   0 (HVITA)*  |
 |:----------------:|:-----:|:-----:|:-----:|:-----:|:--------------:|
 | COCO             | [COCO_50](https://drive.google.com/file/d/1jdsiFTPUJy6PPPmCJZTJ3u-y1LRY0ptp/view?usp=sharing) | [COCO_45](https://drive.google.com/file/d/1y7tzmoSyoGgDm6EwUtYfGUyzyILc-gwz/view?usp=sharing) | ![]() | ![]() | [COCO_00](https://drive.google.com/file/d/1vjlXbsG7k1jHuP_soqDi9HAXqhT5u4OF/view?usp=sharing) |
 | Visual Genome    | [VG_50](https://drive.google.com/file/d/1rG7X9fGa9tptoBBgrSh7fxnLtRFdarH1/view?usp=sharing) | [VG_45](https://drive.google.com/file/d/1gdEn_Gf-3UiAq7dyjPghGpNhhRc2883_/view?usp=sharing) | [VG_40](https://drive.google.com/file/d/1Ca9nl7VfIo4KHl42yWqlNSUkJAowwB0Q/view?usp=sharing) | ![]() | [VG_00](https://drive.google.com/file/d/1om43Uwyynpx2wkPexyhjmUt4Uja_35Dt/view?usp=sharing) |
 
 * HVITA*: Hallucinating Visual Instances with 'Total' Absensia
-
-* Example
-
-Real | Rect mask | Rect masked image | Segmentation mask | Segmentation masked image
-:---:|:---:|:---:|:---:|:---:
-![](./readme_asset/000000_252219_real.jpg) | ![](./readme_asset/000000_252219_rect_mask.jpg) | ![](./readme_asset/000000_252219_rect_masked_image.jpg) | ![](./readme_asset/000000_252219_seg_mask.jpg) | ![](./readme_asset/000000_252219_seg_masked_image.jpg)
 
 ```bash
 {data}_{resolution}_hvita

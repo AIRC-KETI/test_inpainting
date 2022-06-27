@@ -15,11 +15,10 @@ from collections import OrderedDict
 
 from utils.util import *
 from utils.save_image import *
-from data.cocostuff_loader_my import *
-from data.vg_direction import *
+from data.vg_size_free import *
+from data.cocostuff_loader_size_free import *
 from model.resnet_generator_app_v2 import *
 from model.rcnn_discriminator_app import *
-from data.image_only_loader import *
 import model.vis as vis
 from imageio import imwrite
 from model.sync_batchnorm import DataParallelWithCallback
@@ -35,131 +34,221 @@ import piq
 
 def main(args):
     # parameters
-    img_size = args.img_size
     z_dim = 128
     pred_classes = 7 if args.dataset == 'coco' else 7
     num_classes = 184 if args.dataset == 'coco' else 179
     num_obj = 8 if args.dataset == 'coco' else 8
 
-    args.out_path = os.path.join(args.out_path, args.dataset, str(args.img_size))
-
+    if args.ratio < 1.e-6:
+        args.out_path = os.path.join(args.out_path, args.dataset)
+    else:
+        args.out_path = os.path.join(args.out_path, args.dataset+'_'+str(int(100*args.ratio))+'_'+args.direction)
     num_gpus = torch.cuda.device_count()
     num_workers = 2
     if num_gpus > 1:
         parallel = True
-        args.batch_size = args.batch_size * num_gpus
         num_workers = num_workers * num_gpus
     else:
         parallel = False
 
     # data loader
     device = torch.device('cuda')
-    
     if not os.path.exists(args.out_path):
         os.makedirs(args.out_path)
-    if not os.path.exists(os.path.join(args.out_path, 'model/')):
-        os.makedirs(os.path.join(args.out_path, 'model/'))
+    if not os.path.exists(os.path.join(args.out_path, 'real/')):
+        os.makedirs(os.path.join(args.out_path, 'real/'))
+    if not os.path.exists(os.path.join(args.out_path, 'real/')):
+        os.makedirs(os.path.join(args.out_path, 'real/'))
+    if not os.path.exists(os.path.join(args.out_path, 'real/')):
+        os.makedirs(os.path.join(args.out_path, 'real/'))
     if not os.path.exists(os.path.join(args.out_path, 'samples/')):
         os.makedirs(os.path.join(args.out_path, 'samples/'))
-    if not os.path.exists(os.path.join(args.out_path, 'grid_samples/')):
-        os.makedirs(os.path.join(args.out_path, 'grid_samples/'))
+    if not os.path.exists(os.path.join(args.out_path, 'categories/')):
+        os.makedirs(os.path.join(args.out_path, 'categories/'))
+    if not os.path.exists(os.path.join(args.out_path, 'categories/real')):
+        os.makedirs(os.path.join(args.out_path, 'categories/real'))
+    if not os.path.exists(os.path.join(args.out_path, 'categories/seg_masked_image')):
+        os.makedirs(os.path.join(args.out_path, 'categories/seg_masked_image'))
+    if not os.path.exists(os.path.join(args.out_path, 'categories/rect_masked_image')):
+        os.makedirs(os.path.join(args.out_path, 'categories/rect_masked_image'))
+    if not os.path.exists(os.path.join(args.out_path, 'categories/seg_mask')):
+        os.makedirs(os.path.join(args.out_path, 'categories/seg_mask'))
+    if not os.path.exists(os.path.join(args.out_path, 'categories/rect_mask')):
+        os.makedirs(os.path.join(args.out_path, 'categories/rect_mask'))
+
+    for i in range(200):
+        if not os.path.exists(os.path.join(args.out_path, 'categories/real/{:03d}'.format(i))):
+            os.makedirs(os.path.join(args.out_path, 'categories/real/{:03d}'.format(i)))
+        if not os.path.exists(os.path.join(args.out_path, 'categories/seg_masked_image/{:03d}'.format(i))):
+            os.makedirs(os.path.join(args.out_path, 'categories/seg_masked_image/{:03d}'.format(i)))
+        if not os.path.exists(os.path.join(args.out_path, 'categories/rect_masked_image/{:03d}'.format(i))):
+            os.makedirs(os.path.join(args.out_path, 'categories/rect_masked_image/{:03d}'.format(i)))
+        if not os.path.exists(os.path.join(args.out_path, 'categories/seg_mask/{:03d}'.format(i))):
+            os.makedirs(os.path.join(args.out_path, 'categories/seg_mask/{:03d}'.format(i)))
+        if not os.path.exists(os.path.join(args.out_path, 'categories/rect_mask/{:03d}'.format(i))):
+            os.makedirs(os.path.join(args.out_path, 'categories/rect_mask/{:03d}'.format(i)))
     
     if args.dataset == "coco":
-        pair_dataset = COCOPairDataset(args.real_path + './val2017/',
-                                    fake_dir=args.fake_path,
-                                    instances_json=args.real_path + './annotations/instances_val2017.json',
-                                    stuff_json=args.real_path + './annotations/stuff_val2017.json', image_size=(128, 128), left_right_flip=False)
+        pair_dataset = CocoSceneGraphDataset('datasets/coco/val2017/',
+                                    instances_json='datasets/coco/annotations/instances_val2017.json',
+                                    stuff_json='datasets/coco/annotations/stuff_val2017.json', left_right_flip=False)
     elif args.dataset == 'vg':
-        pair_dataset = VGPairDataset(vocab_json=args.real_path + './vocab.json', h5_path=args.real_path + '/test.h5',
-                                   image_dir=args.real_path + './images/',
-                                   fake_dir=args.fake_path,
-                                   image_size=(img_size, img_size), max_objects=7)
+        pair_dataset = VgSceneGraphDataset(vocab_json='data/tmp/vocab.json', h5_path='data/tmp/preprocess_vg/test.h5',
+                                   image_dir='datasets/vg/images/')
 
     dataloader = torch.utils.data.DataLoader(
-        pair_dataset, batch_size=args.batch_size,
+        pair_dataset, batch_size=1,
         drop_last=False, shuffle=False, num_workers=num_workers)
-    
-    test_l1, test_l2, test_ssim, test_psnr, test_lpips, test_is, test_fid = 0, 0, 0, 0, 0, 0, 0
-    inception_v3 = Inceptionv3OnlyFeature().to(device)
-    ssim, psnr, lpips = piq.ssim, piq.psnr, piq.LPIPS()
-    count = 0
-    batch_count = 0
     
     with torch.no_grad():
         for idx, data in enumerate(tqdm(dataloader)):
-            real_images, fake_images = data['images'].to(device), data['fakes'].to(device)
-            # torchvision.utils.save_image(real_images, "{}/piq/real/{}_real_{:06d}.jpg".format(args.out_path, args.dataset, idx))
-            # torchvision.utils.save_image(fake_images, "{}/piq/fake/{}_fake_{:06d}.jpg".format(args.out_path, args.dataset, idx))
-            test_l1 = test_l1 + torch.mean(torch.abs(real_images-fake_images))
-            test_l2 = test_l2 + torch.mean(torch.square(real_images-fake_images))
-            test_ssim = test_ssim + ssim(real_images, fake_images)
-            test_psnr = test_psnr + psnr(real_images, fake_images)
-            test_lpips = test_lpips + lpips(real_images, fake_images)
-            count = count + real_images.size(0)
-            batch_count = batch_count + 1
+            process_mask(idx, data, args)
 
-            real_images = 2. * F.interpolate(real_images, size=(299, 299), mode='nearest') - 1.
-            fake_images = 2. * F.interpolate(fake_images, size=(299, 299), mode='nearest') - 1.
 
-            if idx == 0:
-                real_feats, real_feats_1000 = inception_v3(real_images)
-                fake_feats, ins_feat = inception_v3(fake_images)
+def process_mask(idx, data, args):
+    obj = data['objs']
+    for i in range(obj.size(1)):  # box, image, mask, idx
+        save_mask(idx, data, args, i)
+
+
+def save_mask(idx, data, args, i):
+    image = data['images']
+    obj = data['objs']
+    box = data['boxes']
+    if args.dataset == 'coco':
+        mask = data['masks']
+    else:
+        mask = data['images']
+    bbox = torch.unsqueeze(box[:, i, :], 1)
+    mmask = torch.unsqueeze(mask[:, i, :, :], 1).type(torch.FloatTensor)
+    rect_mask = make_mask(bbox, image, mmask, args, is_rect=True)
+    rect_hvita = image * (1. - rect_mask) + 0.5 * rect_mask
+
+    if args.dataset == 'coco':
+        seg_mask = make_mask(bbox, image, mmask, args, is_rect=False)
+        seg_hvita = image * (1. - seg_mask) + 0.5 * seg_mask
+
+    name = "{:06d}".format(data['image_id'].item()) if args.dataset == 'coco' else str(data['image_id']).replace(
+        "\\", "_").replace(".jpg", "")
+    torchvision.utils.save_image(image,
+                                 "{}/categories/real/{:03d}/{:06d}_{}.jpg".format(
+                                     args.out_path, obj[0, i].item(), idx, name))
+    torchvision.utils.save_image(rect_hvita,
+                                 "{}/categories/rect_masked_image/{:03d}/{:06d}_{}.jpg".format(
+                                     args.out_path, obj[0, i].item(), idx, name))
+    if args.dataset == 'coco':
+        torchvision.utils.save_image(seg_hvita,
+                                     "{}/categories/seg_masked_image/{:03d}/{:06d}_{}.jpg".format(
+                                         args.out_path, obj[0, i].item(), idx, name))
+        torchvision.utils.save_image(seg_mask,
+                                     "{}/categories/seg_mask/{:03d}/{:06d}_{}.jpg".format(
+                                         args.out_path, obj[0, i].item(), idx, name))
+    torchvision.utils.save_image(rect_mask,
+                                 "{}/categories/rect_mask/{:03d}/{:06d}_{}.jpg".format(
+                                     args.out_path, obj[0, i].item(), idx, name))
+
+
+def make_mask(box, image, mask, args, is_rect=True):
+    if is_rect:
+        return make_rect_mask(box, image, args, False)
+    else:
+        return make_seg_mask(mask, box, args)
+
+
+def make_rect_mask(bbox, image, args, is_train=False):
+    ratio = args.ratio
+    if args.direction == 'left':
+        re_box = torch.cat((bbox[:,:,0], bbox[:,:,1], (1.-ratio) * bbox[:,:,2], bbox[:,:,3]), -1)
+    elif args.direction == 'right':
+        re_box = torch.cat((ratio * bbox[:,:,2] + bbox[:,:,0], bbox[:,:,1], bbox[:,:,2], bbox[:,:,3]), -1)
+    elif args.direction == 'upper':
+        re_box = torch.cat((bbox[:,:,0], bbox[:,:,1], bbox[:,:,2], (1.-ratio) * bbox[:,:,3]), -1)
+    else:
+        re_box = torch.cat((bbox[:,:,0], ratio * bbox[:,:,3] + bbox[:,:,1], bbox[:,:,2], bbox[:,:,3]), -1)
+
+    return bil.bbox2_mask(torch.unsqueeze(re_box, 0), image, is_train)
+
+
+def make_seg_mask(mask, box, args):
+    if args.ratio <= 1.e-6:
+        return mask
+    else:
+        return make_seg_mask_ratio(mask, box, args)
+
+
+def make_seg_mask_ratio(mask, bbox, args):
+    count = torch.sum(mask, axis=(1, 2, 3))
+    start_x, start_y = bbox[:,:,0] + 0.5 * bbox[:,:,2], bbox[:,:,1] + 0.5 * bbox[:,:,3]
+    start = (start_x, start_y)
+    for i in range(16):
+        bool_mask = make_bool_mask(start, mask, bbox, args)
+        temp_mask = mask * bool_mask
+        bool_count = torch.sum(temp_mask, axis=(1, 2, 3))
+        # print(bool_count, count, args.ratio, torch.sum(bool_mask, axis=(1, 2, 3)))
+        if abs((bool_count/count) - (1.-args.ratio)) <= 0.02:
+            break
+        elif (bool_count/count) > (1.-args.ratio):  # too many
+            if args.direction == 'left':
+                start = ((start_x-(1/pow(1.25, i))*0.5*bbox[:,:,1]), start_y)
+            elif args.direction == 'right':
+                start = ((start_x+(1/pow(1.25, i))*0.5*bbox[:,:,1]), start_y)
+            elif args.direction == 'upper':
+                start = (start_x, start_y - (1/pow(1.25, i))*0.5*bbox[:,:,3])
             else:
-                temp_real_feats, temp_real_feats_1000 = inception_v3(real_images)
-                real_feats = torch.cat((real_feats, temp_real_feats), 0)
-                real_feats_1000 = torch.cat((real_feats_1000, temp_real_feats_1000), 0)
-                temp_fake_feats, temp_ins_feat = inception_v3(fake_images)
-                fake_feats = torch.cat((fake_feats, temp_fake_feats), 0)
-                ins_feat = torch.cat((ins_feat, temp_ins_feat), 0)
-    
-    fake_feats = torch.squeeze(fake_feats)
-    test_is = inception_score(ins_feat)    
-    test_is_ = inception_score(ins_feat[:5000])
-    real_feats = torch.squeeze(real_feats)
-    print(torch.var_mean(fake_feats, unbiased=False))  # [0.1105, 0.3413]
-    print(torch.var_mean(real_feats, unbiased=False))  # [0.1045, 0.3143]
-    test_fid = compute_metric(real_feats, fake_feats)
-    print(batch_count)
-    print('[*] l1: {} %'.format(100. * test_l1/(batch_count+1.e-6)))
-    print('[*] l2: {} %'.format(100. * test_l2/(batch_count+1.e-6)))
-    print('[*] ssim: {}'.format(test_ssim/(batch_count+1.e-6)))
-    print('[*] psnr: {}'.format(test_psnr/(batch_count+1.e-6)))
-    print('[*] lpips: {}'.format(test_lpips/(batch_count+1.e-6)))
-    print('[*] IS: {} {} \n'.format(test_is, test_is_))
-    print('[*] FID: {} \n'.format(test_fid))
+                start = (start_x, start_y + (1/pow(1.25, i))*0.5*bbox[:,:,3])
+        else:  # too small
+            if args.direction == 'left':
+                start = ((start_x + (1 / pow(1.25, i))*0.5*bbox[:, :, 1]), start_y)
+            elif args.direction == 'right':
+                start = ((start_x - (1 / pow(1.25, i))*0.5*bbox[:, :, 1]), start_y)
+            elif args.direction == 'upper':
+                start = (start_x, start_y + (1 / pow(1.25, i))*0.5*bbox[:, :, 3])
+            else:
+                start = (start_x, start_y - (1 / pow(1.25, i))*0.5*bbox[:, :, 3])
 
-    f= open(args.out_path + "/quantitative_results.txt","w+")
-    f.write('[*] l1: {} %\n'.format(100. * test_l1/(batch_count+1.e-6)))
-    f.write('[*] l2: {} %\n'.format(100. * test_l2/(batch_count+1.e-6)))
-    f.write('[*] ssim: {} \n'.format(test_ssim/(batch_count+1.e-6)))
-    f.write('[*] psnr: {} \n'.format(test_psnr/(batch_count+1.e-6)))
-    f.write('[*] lpips: {} \n'.format(test_lpips/(batch_count+1.e-6)))
-    f.write('[*] IS: {} \n'.format(test_is))
-    f.write('[*] FID: {} \n'.format(test_fid))
-    f.close()
+    return temp_mask
+
+
+def make_bool_mask(start, mask, bbox, args):
+    start_x, start_y = start[0], start[-1]
+
+    if args.direction == 'left':
+        temp_bbox = torch.cat((torch.zeros_like(bbox[:, :, 0]),
+                               torch.zeros_like(bbox[:, :, 1]),
+                               start_x,
+                               torch.ones_like(bbox[:, :, 1]),), -1)
+    elif args.direction == 'right':
+        temp_bbox = torch.cat((start_x,
+                               torch.zeros_like(bbox[:, :, 1]),
+                               torch.ones_like(bbox[:, :, 1]),
+                               torch.ones_like(bbox[:, :, 1]),), -1)
+    elif args.direction == 'upper':
+        temp_bbox = torch.cat((torch.zeros_like(bbox[:, :, 0]),
+                               torch.zeros_like(bbox[:, :, 1]),
+                               torch.ones_like(bbox[:, :, 1]),
+                               start_y,), -1)
+    else:
+        temp_bbox = torch.cat((torch.zeros_like(bbox[:, :, 0]),
+                               start_y,
+                               torch.ones_like(bbox[:, :, 1]),
+                               torch.ones_like(bbox[:, :, 1]),), -1)
+
+    return bil.bbox2_mask(torch.unsqueeze(temp_bbox, 0), mask, False)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str, default='coco',
                         help='training dataset')
-    parser.add_argument('--batch_size', type=int, default=64,
-                        help='mini-batch size of training data. Default: 16')
-    parser.add_argument('--start_epoch', type=int, default=0,
-                        help='number of total training epoch')
-    parser.add_argument('--total_epoch', type=int, default=1,
-                        help='number of total training epoch')
-    parser.add_argument('--g_lr', type=float, default=0.0001,
-                        help='learning rate for generator')
-    parser.add_argument('--real_path', type=str, default='D:/layout2img_ours/datasets/coco',
+    parser.add_argument('--out_path', type=str, default='./size_free',
                         help='path to output files')
-    parser.add_argument('--out_path', type=str, default='D:/layout2img_ours/test_tsa_v3',
-                        help='path to output files')
-    parser.add_argument('--fake_path', type=str, default='D:/layout2img_ours/test_tsa_v3/coco/128/samples',
-                        help='path to output files')
-    parser.add_argument('--img_size', type=str, default=128,
-                        help='generated image size')
+    parser.add_argument('--ratio', type=float, default=0.,
+                        help='remained image ratio of each mask')
+    parser.add_argument('--direction', type=str, default='left',
+                        choices=['left', 'right', 'upper', 'below'],
+                        help='where the parts were deleted from the image')
+
     args = parser.parse_args()
     main(args)
 
-# python test_samples.py --dataset coco --real_path D:/layout2img_ours/datasets/coco --fake_path D:/layout2img_ours/test_tsa_v3/coco/128/samples --out_path D:/layout2img_ours/test_tsa_v3
-# python test_samples.py --dataset vg --real_path  D:/layout2img_ours/datasets/vg --fake_path D:/layout2img_ours/test_tsa_v3/vg/128/samples --out_path D:/layout2img_ours/test_tsa_v3
+# python generate_datasets.py
