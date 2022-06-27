@@ -81,7 +81,7 @@ ${ROOT}
 | image_contents     | float     | [-1,1]                | [Height,Width, 3]  |inpaintied results                     |
 
 ### Model List
-- [X] STALostGAN (Ours)
+- [X] TripleLostGAN (Ours)
 - [X] LostGAN
 - [ ] CAL2IM
 - [ ] CIAFILL
@@ -106,43 +106,101 @@ Run the test script:
 python test_model_with_categories.py \
 --dataset [DATASET] --out_path [OUT_DIR] --ckpt_path [CKPT_DIR] --model_name [MODEL_NAME]
 ```
-Note: This test is for hallucinating visual instances with total absensia. In coco and vg, the object corresponding to the label index defined in each task is deleted from the image, and the object is restored by inputting the index.
+Note: This test is for hallucinating visual instances with potal absensia. In coco and vg, the object corresponding to the label index defined in each task is deleted from the image, and the object is restored by inputting the index.
 
 ## Test Datasets for Various Tasks
 
-#### Task 1: Hallucinating Visual Instances with Total Absensia
+#### Task 1: Hallucinating Visual Instances with Parital Absentia (HVIPA)
 
-* Download link: [COCO 128x128](https://drive.google.com/file/d/10AFxZRvI9Q0sk5Y_pw4AoRyE3uSGrrD9/view?usp=sharing)
-* Download link: [VG 128x128](https://drive.google.com/file/d/1SL8vApyWbWp1K13nvBSvp4myE7eAg4GO/view?usp=sharing)
+This task aims to restore an object when it has been partially or completely erased from the image.
 
-Note: The dataset consists of masked_images, masks, and real folders. Each folder contains images with completely absent objects corresponding to the index defined in each dataset.
+The smaller the remaining ratio, the higher the percentage of objects erased.
+
+| Remain ratio     |   50  |   45  |   40  |   20  |   0 (HVITA)*  |
+|:----------------:|:-----:|:-----:|:-----:|:-----:|:--------------:|
+| COCO             | [COCO_50](https://drive.google.com/file/d/1jdsiFTPUJy6PPPmCJZTJ3u-y1LRY0ptp/view?usp=sharing) | [COCO_45](https://drive.google.com/file/d/1y7tzmoSyoGgDm6EwUtYfGUyzyILc-gwz/view?usp=sharing) | ![]() | ![]() | [COCO_00](https://drive.google.com/file/d/1vjlXbsG7k1jHuP_soqDi9HAXqhT5u4OF/view?usp=sharing) |
+| Visual Genome    | [VG_50](https://drive.google.com/file/d/1rG7X9fGa9tptoBBgrSh7fxnLtRFdarH1/view?usp=sharing) | [VG_45](https://drive.google.com/file/d/1gdEn_Gf-3UiAq7dyjPghGpNhhRc2883_/view?usp=sharing) | [VG_40](https://drive.google.com/file/d/1Ca9nl7VfIo4KHl42yWqlNSUkJAowwB0Q/view?usp=sharing) | ![]() | [VG_00](https://drive.google.com/file/d/1om43Uwyynpx2wkPexyhjmUt4Uja_35Dt/view?usp=sharing) |
+
+* HVITA*: Hallucinating Visual Instances with 'Total' Absensia
+
+* Example
+
+Real | Rect mask | Rect masked image | Segmentation mask | Segmentation masked image
+:---:|:---:|:---:|:---:|:---:
+![](./readme_asset/000000_252219_real.jpg) | ![](./readme_asset/000000_252219_rect_mask.jpg) | ![](./readme_asset/000000_252219_rect_masked_image.jpg) | ![](./readme_asset/000000_252219_seg_mask.jpg) | ![](./readme_asset/000000_252219_seg_masked_image.jpg)
 
 ```bash
 {data}_{resolution}_hvita
-├── masked_images
-    └── 000
-    └── 001
-    ...
-    └── xxx(the last index number)
-├── masks
-    └── 000
-    └── 001
-    ...
-    └── xxx(the last index number)
 ├── real
-    └── 000
-    └── 001
-    ...
-    └── xxx(the last index number)
+│   ├── 000
+│   │   ├── xxxxxx.jpg
+│   │   ├── xxxxxx.jpg        
+│   │   └── ...           
+│   ├── 001
+│   │   ├── xxxxxx.jpg
+│   │   ├── xxxxxx.jpg
+│   │   └── ...       
+│   └── ...(the last index number)
+├── rect_mask
+│   ├── 000
+│   │   ├── xxxxxx.jpg
+│   │   ├── xxxxxx.jpg        
+│   │   └── ...           
+│   ├── 001
+│   │   ├── xxxxxx.jpg
+│   │   ├── xxxxxx.jpg
+│   │   └── ...       
+│   └── ...(the last index number)
+├── rect_masked_image
+│   ├── 000
+│   │   ├── xxxxxx.jpg
+│   │   ├── xxxxxx.jpg        
+│   │   └── ...           
+│   ├── 001
+│   │   ├── xxxxxx.jpg
+│   │   ├── xxxxxx.jpg
+│   │   └── ...       
+│   └── ...(the last index number)
+├── seg_mask
+│   ├── 000
+│   │   ├── xxxxxx.jpg
+│   │   ├── xxxxxx.jpg        
+│   │   └── ...           
+│   ├── 001
+│   │   ├── xxxxxx.jpg
+│   │   ├── xxxxxx.jpg
+│   │   └── ...       
+│   └── ...(the last index number)
+└── seg_masked_image
+    ├── 000
+    │   ├── xxxxxx.jpg
+    │   ├── xxxxxx.jpg        
+    │   └── ...           
+    ├── 001
+    │   ├── xxxxxx.jpg
+    │   ├── xxxxxx.jpg
+    │   └── ...       
+    └── ...(the last index number)
 ```
 
-#### Task 2: Inpainting
+#### Task 2: Hallucinating Multiple instances with partial Absentia 
+
+This task aims to restore two or more objects when it has been partially or completely erased from the image.
+
+The smaller the remaining ratio, the higher the percentage of objects erased.
+
+| Remain ratio     |   50  |   45  |   40  |   20  |   0 (HVITA)*  |
+|:----------------:|:-----:|:-----:|:-----:|:-----:|:--------------:|
+| COCO             | [COCO_50](https://drive.google.com/file/d/1jdsiFTPUJy6PPPmCJZTJ3u-y1LRY0ptp/view?usp=sharing) | [COCO_45](https://drive.google.com/file/d/1y7tzmoSyoGgDm6EwUtYfGUyzyILc-gwz/view?usp=sharing) | ![]() | ![]() | [COCO_00](https://drive.google.com/file/d/1vjlXbsG7k1jHuP_soqDi9HAXqhT5u4OF/view?usp=sharing) |
+| Visual Genome    | [VG_50](https://drive.google.com/file/d/1rG7X9fGa9tptoBBgrSh7fxnLtRFdarH1/view?usp=sharing) | [VG_45](https://drive.google.com/file/d/1gdEn_Gf-3UiAq7dyjPghGpNhhRc2883_/view?usp=sharing) | [VG_40](https://drive.google.com/file/d/1Ca9nl7VfIo4KHl42yWqlNSUkJAowwB0Q/view?usp=sharing) | ![]() | [VG_00](https://drive.google.com/file/d/1om43Uwyynpx2wkPexyhjmUt4Uja_35Dt/view?usp=sharing) |
+
+#### Task 3: Inpainting
 
 * Download link: [Places2](http://places2.csail.mit.edu/download.html)
 * Download link:  [CelebA-HQ](https://drive.google.com/drive/folders/0B4qLcYyJmiz0TXY1NG02bzZVRGs?resourcekey=0-arAVTUfW9KRhN-irJchVKQ)
 * Download link:  [IrregularMask](https://www.dropbox.com/s/01dfayns9s0kevy/test_mask.zip?dl=0)
 
-#### Task 3: HVITA+Inpainting
+#### Task 4: HVITA+Inpainting
 
 * Download link: [COCO 128x128](https://drive.google.com/file/d/11xapK9GCIP-iZuvn8julofitQ_EPpNbh/view?usp=sharing)
 * Download link: [VG 128x128](https://drive.google.com/file/d/1ONn3-sABfuFhjZj81X3VQqHvV-24ShuY/view?usp=sharing)
