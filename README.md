@@ -84,6 +84,12 @@ python test_models.py \
 
 ## Test Datasets for Various Tasks
 
+* Example
+
+Real | Rect mask | Rect masked image | Segmentation mask | Segmentation masked image
+:---:|:---:|:---:|:---:|:---:
+![](./readme_asset/000000_252219_real.jpg) | ![](./readme_asset/000000_252219_rect_mask.jpg) | ![](./readme_asset/000000_252219_rect_masked_image.jpg) | ![](./readme_asset/000000_252219_seg_mask.jpg) | ![](./readme_asset/000000_252219_seg_masked_image.jpg)
+
 ### Task 1: Hallucinating Visual Instances with Parital Absentia (HVIPA)
 
 This task aims to restore an object when it has been partially or completely erased from the image.
@@ -92,9 +98,10 @@ The smaller the remaining ratio, the higher the percentage of objects erased.
 
 * Example
 
-Real | Rect mask | Rect masked image | Segmentation mask | Segmentation masked image
-:---:|:---:|:---:|:---:|:---:
-![](./readme_asset/000000_252219_real.jpg) | ![](./readme_asset/000000_252219_rect_mask.jpg) | ![](./readme_asset/000000_252219_rect_masked_image.jpg) | ![](./readme_asset/000000_252219_seg_mask.jpg) | ![](./readme_asset/000000_252219_seg_masked_image.jpg)
+| | 50 | 45 | 40 | 20 | 0
+:---:|:---:|:---:|:---:|:---:|:---:
+Remain ratio | ![](./readme_asset/000000_252219_50.jpg) | ![](./readme_asset/000000_252219_45.jpg) | ![](./readme_asset/000000_252219_40.jpg) | ![](./readme_asset/000000_252219_20.jpg) | ![](./readme_asset/000000_252219_seg_masked_image.jpg)
+
 
 * Download Link (Google Drive)
 
