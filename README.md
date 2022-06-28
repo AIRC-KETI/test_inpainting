@@ -37,7 +37,9 @@ bash scripts/download_vg.sh
 python scripts/preprocess_vg.py
 ```
 
-## Test Model
+## Test
+
+### Test Model
 
 Run the test script:
 
@@ -49,7 +51,7 @@ python test_model.py \
 
 please see [TEST.md](TEST.md).
 
-## Test Samples
+### Test Samples
 
 Run the test script:
 
@@ -60,7 +62,7 @@ Note 1: Measuring IS or FID is recommended by generating more than 50,000 sample
 
 Note 2: The data type is converted from float to uint8 when saving the image. For accurate measurement, use the [test_model.py](/test_model.py) whenever possible.
 
-## Test Model with Categories
+### Test Model with Categories
 
 Run the test script:
 
@@ -71,7 +73,7 @@ python test_model_with_categories.py \
 Note: This test is for hallucinating visual instances with partial absentia.
 In coco and vg, the object corresponding to the label index defined in each task is deleted from the image, and the object is restored by input index.
 
-## Visualizing Qualitative Comparisons
+### Visualizing Qualitative Comparisons
 
 Run the test script:
 
@@ -107,7 +109,7 @@ Remain ratio | ![](./readme_asset/000000_252219_50.jpg) | ![](./readme_asset/000
 
 | Remain ratio     |   50  |   45  |   40  |   20  |   0 (HVITA)*  |
 |:----------------:|:-----:|:-----:|:-----:|:-----:|:--------------:|
-| COCO             | [COCO_50](https://drive.google.com/file/d/1jdsiFTPUJy6PPPmCJZTJ3u-y1LRY0ptp/view?usp=sharing) | [COCO_45](https://drive.google.com/file/d/1y7tzmoSyoGgDm6EwUtYfGUyzyILc-gwz/view?usp=sharing) | [COCO_40](https://drive.google.com/file/d/1kswCnfLU3WuRrWfXc-9B8tn1I38a-niF/view?usp=sharing) | [COCO_20](https://drive.google.com/file/d/1fV2yRtzyCjXm7_vxWkanHsRSbPt850va/view?usp=sharing) | [COCO_00](https://drive.google.com/file/d/1vjlXbsG7k1jHuP_soqDi9HAXqhT5u4OF/view?usp=sharing) |
+| COCO             | [COCO_50](https://drive.google.com/file/d/1jdsiFTPUJy6PPPmCJZTJ3u-y1LRY0ptp/view?usp=sharing)  | [COCO_45](https://drive.google.com/file/d/1y7tzmoSyoGgDm6EwUtYfGUyzyILc-gwz/view?usp=sharing) | [COCO_40](https://drive.google.com/file/d/1kswCnfLU3WuRrWfXc-9B8tn1I38a-niF/view?usp=sharing) | [COCO_20](https://drive.google.com/file/d/1fV2yRtzyCjXm7_vxWkanHsRSbPt850va/view?usp=sharing) | [COCO_00](https://drive.google.com/file/d/1vjlXbsG7k1jHuP_soqDi9HAXqhT5u4OF/view?usp=sharing) |
 | Visual Genome    | [VG_50](https://drive.google.com/file/d/1rG7X9fGa9tptoBBgrSh7fxnLtRFdarH1/view?usp=sharing) | [VG_45](https://drive.google.com/file/d/1gdEn_Gf-3UiAq7dyjPghGpNhhRc2883_/view?usp=sharing) | [VG_40](https://drive.google.com/file/d/1Ca9nl7VfIo4KHl42yWqlNSUkJAowwB0Q/view?usp=sharing) | [VG_20](https://drive.google.com/file/d/1tlIryZTfWLAbSRB6Q-5XUF__jehYi3pJ/view?usp=sharing) | [VG_00](https://drive.google.com/file/d/1om43Uwyynpx2wkPexyhjmUt4Uja_35Dt/view?usp=sharing) |
 
 * HVITA*: Hallucinating Visual Instances with 'Total' Absensia
