@@ -31,6 +31,7 @@ import json
 import glob
 import re
 import piq
+import matplotlib.pyplot as plt
 
 def get_dataset(dataset, my_path, img_size):
     if dataset == "coco":
@@ -73,25 +74,25 @@ def main(args):
 
     # Load model
     device = torch.device('cuda')
-    netG = eval(args.model_name)(num_classes=num_classes, pred_classes=pred_classes, output_dim=3).to(device)
-    netG_ = eval(args.model_name)(num_classes=num_classes, pred_classes=pred_classes, output_dim=3).to(device)
+    netG = []
+    for i in range(len(args.model_name)):
+        netG.append(eval(args.model_name[i])(num_classes=num_classes, pred_classes=pred_classes, output_dim=3).to(device))
     # print(os.path.isfile(args.ckpt_path))
-    assert os.path.isfile(args.ckpt_path) is True
-    state_dict = torch.load(args.ckpt_path)
-    print('[*] load_{}'.format(args.ckpt_path))
-    new_state_dict = OrderedDict()
-    for k, v in state_dict.items():
-        name = k[7:]  # remove `module.`nvidia
-        new_state_dict[name] = v
+        assert os.path.isfile(args.ckpt_path[i]) is True
+        state_dict = torch.load(args.ckpt_path[i])
+        print('[*] load_{}'.format(args.ckpt_path[i]))
+        new_state_dict = OrderedDict()
+        for k, v in state_dict.items():
+            name = k[7:]  # remove `module.`nvidia
+            new_state_dict[name] = v
 
-    model_dict = netG.state_dict()
-    pretrained_dict = {k: v for k, v in new_state_dict.items() if k in model_dict}
-    model_dict.update(pretrained_dict)
-    netG.load_state_dict(model_dict)
-    netG.to(device)
-
-    if parallel:
-        netG = DataParallelWithCallback(netG)
+        model_dict = netG[i].state_dict()
+        pretrained_dict = {k: v for k, v in new_state_dict.items() if k in model_dict}
+        model_dict.update(pretrained_dict)
+        netG[i].load_state_dict(model_dict)
+        netG[i].to(device)
+        if parallel:
+            netG[i] = DataParallelWithCallback(netG[i])
 
     # make dirs
     if not os.path.exists(args.out_path):
@@ -118,7 +119,8 @@ def main(args):
     batch_count = 0
     
     for epoch in range(args.start_epoch, args.total_epoch):
-        netG.eval()
+        for i in range(len(netG)):
+            netG[i].eval
         with torch.no_grad():
             for idx, data in enumerate(tqdm(dataloader)):
                 real_images, label, bbox, triples = data
@@ -131,66 +133,19 @@ def main(args):
 
                 # generate images
                 content = {'image_contents': masked_images, 'mask': mask, 'label': label.squeeze(dim=-1), 'bbox': bbox, 'triples': triples}
-                fake_images_dict = netG(content)
-                fake_images = fake_images_dict['image_contents'] * mask + masked_images * (1.-mask)
-                
-                for i in range(real_images.size(0)):
-                    # torchvision.utils.save_image((fake_images[i] - torch.min(fake_images[i]))/(torch.max(fake_images[i]) - torch.min(fake_images[i])+1.e-6), "{}/samples/{}_fake_{:06d}_{:06d}_{:06d}.jpg".format(args.out_path, args.dataset, epoch, idx, i))
-                    torchvision.utils.save_image((masked_images[i]+1.)/2., "{}/masked_images/{}_fake_{:06d}_{:06d}_{:06d}.jpg".format(args.out_path, args.dataset, epoch, idx, i), value_range=(0., 1.))
-                    torchvision.utils.save_image(mask[i], "{}/masks/{}_fake_{:06d}_{:06d}_{:06d}.jpg".format(args.out_path, args.dataset, epoch, idx, i), value_range=(0., 1.))
-                    torchvision.utils.save_image((fake_images[i]+1.)/2., "{}/samples/{}_fake_{:06d}_{:06d}_{:06d}.jpg".format(args.out_path, args.dataset, epoch, idx, i), value_range=(0., 1.))
+                fake_images = []
+                for i in range(len(netG)):
+                    fake_images_dict = netG[i](content)
+                    if i == 0:
+                        fake_images = fake_images_dict['image_contents'] * mask + masked_images * (1.-mask)
+                    else:
+                        fake_images = torch.cat((fake_images, fake_images_dict['image_contents'] * mask + masked_images * (1.-mask)), 0)
 
-                real_images = (real_images + 1.)/2.
-                fake_images = (fake_images + 1.)/2.
-
-                # metric check
-                test_l1 = test_l1 + torch.mean(torch.abs(real_images-fake_images))
-                test_l2 = test_l2 + torch.mean(torch.square(real_images-fake_images))
-                test_ssim = test_ssim + ssim(real_images, fake_images)
-                test_psnr = test_psnr + psnr(real_images, fake_images)
-                test_lpips = test_lpips + lpips(real_images, fake_images)
-                count = count + real_images.size(0)
-                batch_count = batch_count + 1
-
-                real_images = 2. * F.interpolate(real_images, size=(299, 299), mode='nearest') - 1.
-                fake_images = 2. * F.interpolate(fake_images, size=(299, 299), mode='nearest') - 1.
-
-                if idx == 0 and epoch == args.start_epoch:
-                    real_feats, real_feats_1000 = inception_v3(real_images)
-                    fake_feats, ins_feat = inception_v3(fake_images)
-                else:
-                    temp_real_feats, temp_real_feats_1000 = inception_v3(real_images)
-                    real_feats = torch.cat((real_feats, temp_real_feats), 0)
-                    real_feats_1000 = torch.cat((real_feats_1000, temp_real_feats_1000), 0)
-                    temp_fake_feats, temp_ins_feat = inception_v3(fake_images)
-                    fake_feats = torch.cat((fake_feats, temp_fake_feats), 0)
-                    ins_feat = torch.cat((ins_feat, temp_ins_feat), 0)
-
-    fake_feats = torch.squeeze(fake_feats)
-    test_is = inception_score(ins_feat)    
-    test_is_ = inception_score(ins_feat[:5000])
-    real_feats = torch.squeeze(real_feats)
-    print(torch.var_mean(fake_feats, unbiased=False))  # [0.1105, 0.3413]
-    print(torch.var_mean(real_feats, unbiased=False))  # [0.1045, 0.3143]
-    test_fid = compute_metric(real_feats, fake_feats)
-    print(batch_count)
-    print('[*] l1: {} %'.format(100. * test_l1/(batch_count+1.e-6)))
-    print('[*] l2: {} %'.format(100. * test_l2/(batch_count+1.e-6)))
-    print('[*] ssim: {}'.format(test_ssim/(batch_count+1.e-6)))
-    print('[*] psnr: {}'.format(test_psnr/(batch_count+1.e-6)))
-    print('[*] lpips: {}'.format(test_lpips/(batch_count+1.e-6)))
-    print('[*] IS: {} {} \n'.format(test_is, test_is_))
-    print('[*] FID: {} \n'.format(test_fid))
-
-    f= open(args.out_path + "/quantitative_results.txt","w+")
-    f.write('[*] l1: {} %\n'.format(100. * test_l1/(batch_count+1.e-6)))
-    f.write('[*] l2: {} %\n'.format(100. * test_l2/(batch_count+1.e-6)))
-    f.write('[*] ssim: {} \n'.format(test_ssim/(batch_count+1.e-6)))
-    f.write('[*] psnr: {} \n'.format(test_psnr/(batch_count+1.e-6)))
-    f.write('[*] lpips: {} \n'.format(test_lpips/(batch_count+1.e-6)))
-    f.write('[*] IS: {} \n'.format(test_is))
-    f.write('[*] FID: {} \n'.format(test_fid))
-    f.close()
+                grid = torch.cat((mask.expand(-1, 3, -1, -1), masked_images, fake_images, real_images), 0)
+                grid_samples = make_grid(grid, real_images.size(0), normalize=True)
+                save_image(grid_samples,
+                           "{}/grid_samples/{:06d}_{}.jpg".format(
+                               args.out_path, idx, str(args.model_name)))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -198,17 +153,17 @@ if __name__ == "__main__":
                         help='training dataset')
     parser.add_argument('--data_path', type=str, default='./datasets',
                         help='path to dataset')
-    parser.add_argument('--batch_size', type=int, default=64,
+    parser.add_argument('--batch_size', type=int, default=16,
                         help='mini-batch size of training data. Default: 16')
     parser.add_argument('--start_epoch', type=int, default=0,
                         help='number of total training epoch')
-    parser.add_argument('--total_epoch', type=int, default=18,
+    parser.add_argument('--total_epoch', type=int, default=1,
                         help='number of total training epoch')
-    parser.add_argument('--out_path', type=str, default='./outputs/tmp/our_d/',
+    parser.add_argument('--out_path', type=str, default='./compare/',
                         help='path to output files')
-    parser.add_argument('--ckpt_path', type=str, default='D:/layout2img_ours/tsa_v3/coco/128/model/',
+    parser.add_argument('--ckpt_path', nargs='+', type=str, default='D:/layout2img_ours/tsa_v3/coco/128/model/',
                         help='path to checkpoint file')
-    parser.add_argument('--model_name', type=str, default='ResnetGenerator128_inpaint_triple_v2',
+    parser.add_argument('--model_name', nargs='+', type=str, default='ResnetGenerator128_inpaint_triple_v2',
                         help='file_name')
     parser.add_argument('--img_size', type=str, default=128,
                         help='generated image size')

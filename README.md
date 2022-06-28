@@ -77,7 +77,9 @@ Run the test script:
 
 ```bash
 python test_models.py \
---dataset [DATASET] --out_path [OUT_DIR] --ckpt_path [CKPT_DIR] --model_name [MODEL_NAME]
+--dataset [DATASET] --out_path [OUT_DIR] \
+--ckpt_path [CKPT_DIR_0] [CKPT_DIR_1] ... [CKPT_DIR_N-1] \
+--model_name [MODEL_NAME_0] [MODEL_NAME_1] ... [MODEL_NAME_N-1]
 ```
 
 ## Test Datasets for Various Tasks
