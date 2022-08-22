@@ -18,6 +18,7 @@ from utils.save_image import *
 from data.cocostuff_loader_my import *
 from data.vg_direction import *
 from model.resnet_generator_app_v2 import *
+from model.generator_my import *
 from data.image_only_loader import *
 import model.vis as vis
 from imageio import imwrite
@@ -38,18 +39,18 @@ def get_dataset(dataset, my_path, img_size):
                                      stuff_json=my_path+'./coco/annotations/stuff_val2017.json',
                                      stuff_only=True, image_size=(img_size, img_size), left_right_flip=False)
     elif dataset == 'vg':
-        data = VgSceneGraphDataset(vocab_json=my_path+'./vg/vocab.json', h5_path=my_path+'./vg/test.h5',
-                                   image_dir=my_path+'./vg/images/',
-                                   image_size=(img_size, img_size), max_objects=7, left_right_flip=False)
+        data = VgSceneGraphDataset(vocab_json=my_path+'/vg/vocab.json', h5_path=my_path+'/vg/test.h5',
+                                   image_dir=my_path+'/vg/images/',
+                                   image_size=(img_size, img_size), max_objects=30, left_right_flip=False)
     return data
 
 
 def main(args):
     # parameters
     img_size = args.img_size
-    pred_classes = 7 if args.dataset == 'coco' else 7
+    pred_classes = 7 if args.dataset == 'coco' else 46
     num_classes = 184 if args.dataset == 'coco' else 179
-    num_obj = 8 if args.dataset == 'coco' else 8
+    num_obj = 8 if args.dataset == 'coco' else 31
 
     args.out_path = os.path.join(args.out_path, args.dataset, str(args.img_size))
 
@@ -132,6 +133,7 @@ def main(args):
 
     # test_l1, test_l2, test_ssim, test_psnr, test_lpips, test_is, test_is_, test_fid = 0, 0, 0, 0, 0, 0, 0, 0
     test_l1, test_l2, test_ssim, test_psnr, test_lpips, test_is, test_is_, test_fid = [0]*200, [0]*200, [0]*200, [0]*200, [0]*200, [0]*200, [0]*200, [0]*200
+    resized_l1, resized_l2, resized_ssim, resized_psnr, resized_lpips, resized_is, resized_is_, resized_fid = [0]*200, [0]*200, [0]*200, [0]*200, [0]*200, [0]*200, [0]*200, [0]*200
     inception_v3 = Inceptionv3OnlyFeature().to(device)
     ssim, psnr, lpips = piq.ssim, piq.psnr, piq.LPIPS()
     count = [0]*200
@@ -228,7 +230,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str, default='coco',
                         help='training dataset')
-    parser.add_argument('--data_path', type=str, default='./dataset',
+    parser.add_argument('--data_path', type=str, default='./datasets',
                         help='path to dataset')
     parser.add_argument('--batch_size', type=int, default=64,
                         help='mini-batch size of training data. Default: 16')
@@ -242,7 +244,7 @@ if __name__ == "__main__":
                         help='path to checkpoint file')
     parser.add_argument('--model_name', type=str, default='ResnetGenerator128_inpaint_triple_v2',
                         help='file_name')
-    parser.add_argument('--img_size', type=str, default=128,
+    parser.add_argument('--img_size', type=int, default=128,
                         help='generated image size')
     # parser.add_argument('--metric', type=str, nargs='+', default='l1 l2 ssim psnr lpips is fid')
     args = parser.parse_args()

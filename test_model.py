@@ -41,16 +41,16 @@ def get_dataset(dataset, my_path, img_size):
     elif dataset == 'vg':
         data = VgSceneGraphDataset(vocab_json=my_path+'/vg/vocab.json', h5_path=my_path+'/vg/test.h5',
                                    image_dir=my_path+'/vg/images/',
-                                   image_size=(img_size, img_size), max_objects=7, left_right_flip=False)
+                                   image_size=(img_size, img_size), max_objects=30, left_right_flip=False)
     return data
 
 
 def main(args):
     # parameters
     img_size = args.img_size
-    pred_classes = 7 if args.dataset == 'coco' else 7
+    pred_classes = 7 if args.dataset == 'coco' else 46
     num_classes = 184 if args.dataset == 'coco' else 179
-    num_obj = 8 if args.dataset == 'coco' else 8
+    num_obj = 8 if args.dataset == 'coco' else 31
 
     args.out_path = os.path.join(args.out_path, args.dataset, str(args.img_size))
 
@@ -74,7 +74,6 @@ def main(args):
     # Load model
     device = torch.device('cuda')
     netG = eval(args.model_name)(num_classes=num_classes, pred_classes=pred_classes, output_dim=3).to(device)
-    # print(os.path.isfile(args.ckpt_path))
     assert os.path.isfile(args.ckpt_path) is True
     state_dict = torch.load(args.ckpt_path)
     print('[*] load_{}'.format(args.ckpt_path))
@@ -209,7 +208,7 @@ if __name__ == "__main__":
                         help='path to checkpoint file')
     parser.add_argument('--model_name', type=str, default='ResnetGenerator128_inpaint_triple_v2',
                         help='file_name')
-    parser.add_argument('--img_size', type=str, default=128,
+    parser.add_argument('--img_size', type=int, default=128,
                         help='generated image size')
     parser.add_argument('--metric', type=str, nargs='+', default='l1 l2 ssim psnr lpips is fid')
     args = parser.parse_args()
