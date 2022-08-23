@@ -47,6 +47,14 @@ Run the test script:
 python test_model.py \
 --dataset [DATASET] --out_path [OUT_DIR] --ckpt_path [CKPT_DIR] --model_name [MODEL_NAME]
 ```
+
+#### example
+
+```bash
+python test_model.py \
+--dataset vg --out_path my_output --ckpt_path ./pretrained/triplegenerator.ckpt --model_name TripleGenerator_v2
+```
+
 #### Note for test your own model
 
 please see [TEST.md](TEST.md).
