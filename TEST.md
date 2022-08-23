@@ -33,8 +33,10 @@ ${ROOT}
 | image_contents     | float     | [-1,1]                | [Height,Width, 3]  |inpaintied results                     |
 
 ### Model List
+- [X] DeepFillv2
+- [X] LostGANv2
+- [X] LostGANv2 (trained for inpainting)
+- [X] HVITA
 - [X] TripleLostGAN (Ours)
-- [X] LostGAN
 - [ ] CAL2IM
-- [ ] CIAFILL
 - [ ] Hyein et al.
