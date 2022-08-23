@@ -48,7 +48,7 @@ python test_model.py \
 --dataset [DATASET] --out_path [OUT_DIR] --ckpt_path [CKPT_DIR] --model_name [MODEL_NAME]
 ```
 
-#### example
+For example,
 
 ```bash
 python test_model.py \
