@@ -52,7 +52,7 @@ python test_model.py \
 
 ```bash
 python test_model.py \
---dataset vg --out_path my_output --ckpt_path ./pretrained/triplegenerator.ckpt --model_name TripleGenerator_v2
+--dataset vg --out_path ./my_output --ckpt_path ./pretrained/triplegenerator.ckpt --model_name TripleGenerator_v2
 ```
 
 #### Note for test your own model
