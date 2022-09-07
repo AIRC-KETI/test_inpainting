@@ -1,3 +1,4 @@
+from tkinter.ttk import LabeledScale
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -1035,25 +1036,23 @@ class ResnetGenerator128_gen_subject(nn.Module):
         self.mask_regress = MaskRegressNetv2(num_w)
         self.init_parameter()
 
-    def forward(self, z, bbox, z_im=None, y=None, triples=None, masked_images=None):
-        # print(z)
-        # print(bbox)
-        # print(y)
-        # print(triples)  still ok
+    def forward(self, content):
+        z = content['z']
+        bbox = content['bbox']
+        y = content['label']
+        triples = content['triples']
+        masked_images = content['image_contents']
+        mask = content['mask']
         b, obj = z.size(0), z.size(1)
         label_embedding = self.label_embedding(y)
-        # print(label_embedding) still ok
         z = z.view(b * obj, -1)
-
         label_embedding = label_embedding.view(b * obj, -1)
         latent_vector = torch.cat((z, label_embedding), dim=1).view(b, obj, -1)
         w = self.mapping(latent_vector.view(b * obj, -1)).view(b, obj, -1)
         w = w.view(b * obj, -1)
         bmask = self.mask_regress(w, bbox)
 
-        if z_im is None:
-            z_im = torch.randn((b, 128), device=z.device)
-
+        z_im = torch.randn((b, 128), device=z.device)
         bbox_mask_ = bbox_mask(z, bbox, 64, 64)
 
         # 4x4
@@ -1096,7 +1095,7 @@ class ResnetGenerator128_gen_subject(nn.Module):
 
         # to RGB
         x = self.final(x)
-        return x
+        return {'image_contents': x}
 
     def init_parameter(self):
         for k in self.named_parameters():
@@ -2036,31 +2035,31 @@ class ResnetGenerator128_hvita(nn.Module):
 
         self.fc = nn.utils.spectral_norm(nn.Linear(1024, 2048))
         num_w = 180
-        self.o_conv1 = DupleConv(ch * 64, ch * 4, num_w=num_w)  # 2x2
-        self.o_conv2 = DupleConv(ch * 4, ch * 4, num_w=num_w)  # 4x4
-        self.o_conv3 = DupleConv(ch * 4, ch * 8, num_w=num_w)  # 8x8
-        self.o_conv4 = DupleConv(ch * 8, ch * 8, num_w=num_w)  # 16x16
-        self.o_conv5 = DupleConv(ch * 8, ch * 2, num_w=num_w, psp_module=True)  # 32x32
-        self.o_conv6 = DupleConv(ch * 2, ch * 1, num_w=num_w, predict_mask=False)  # 64x64
+        self.o_conv1 = DupleConv(ch * 8, ch * 4)  # 2x2
+        self.o_conv2 = DupleConv(ch * 4, ch * 4)  # 4x4
+        self.o_conv3 = DupleConv(ch * 4, ch * 8)  # 8x8
+        self.o_conv4 = DupleConv(ch * 8, ch * 8)  # 16x16
+        self.o_conv5 = DupleConv(ch * 8, ch * 2)  # 32x32
+        self.o_conv6 = DupleConv(ch * 2, ch * 1)  # 64x64
         self.o_final = nn.Sequential(BatchNorm(ch),
                                    nn.ReLU(),
                                    conv2d(ch, output_dim, 3, 1, 1),
                                    nn.Tanh())
-        
-        self.r_conv1 = DupleConv(3, ch, stride=2, num_w=num_w)  # 64x64
-        self.r_conv2 = DupleConv(ch, ch * 2, stride=2, num_w=num_w)  # 32x32
-        self.r_conv3 = DupleConv(ch * 2, ch * 4, stride=2, num_w=num_w)  # 16x16
-        self.r_conv4 = DupleConv(ch * 4, ch * 8, stride=2, num_w=num_w, psp_module=True)  # 8x8
-        self.r_conv5 = DupleConv(ch * 8, ch * 8, stride=2, num_w=num_w, predict_mask=False)  # 4x4
-        self.r_conv6 = DupleConv(ch * 8, ch * 8, stride=2, num_w=num_w, predict_mask=False)  # 2x2
-        self.r_conv7 = DupleConv(ch * 8, ch * 8, stride=2, num_w=num_w, predict_mask=False)  # 1x1
 
-        self.r_conv8 = DupleConv(ch * 16, ch * 8, num_w=num_w, predict_mask=False)  #+res6
-        self.r_conv9 = DupleConv(ch * 16, ch * 8, num_w=num_w, predict_mask=False)  #+res5
-        self.r_conv10 = DupleConv(ch * 16, ch * 8, num_w=num_w, predict_mask=False)  #+res4
-        self.r_conv11 = DupleConv(ch * 12, ch * 4, num_w=num_w, predict_mask=False)  #+res3
-        self.r_conv12 = DupleConv(ch * 6, ch * 2, num_w=num_w, predict_mask=False)  #+res2
-        self.r_conv13 = DupleConv(ch * 3, ch * 1, num_w=num_w, predict_mask=False)  #+res1
+        self.r_conv1 = DupleConv(3, ch, stride=2)  # 64x64
+        self.r_conv2 = DupleConv(ch, ch * 2, stride=2)  # 32x32
+        self.r_conv3 = DupleConv(ch * 2, ch * 4, stride=2)  # 16x16
+        self.r_conv4 = DupleConv(ch * 4, ch * 8, stride=2)  # 8x8
+        self.r_conv5 = DupleConv(ch * 8, ch * 8, stride=2)  # 4x4
+        self.r_conv6 = DupleConv(ch * 8, ch * 8, stride=2)  # 2x2
+        self.r_conv7 = DupleConv(ch * 8, ch * 8, stride=2)  # 1x1
+
+        self.r_conv8 = DupleConv(ch * 16, ch * 8)  #+res6
+        self.r_conv9 = DupleConv(ch * 16, ch * 8)  #+res5
+        self.r_conv10 = DupleConv(ch * 16, ch * 8)  #+res4
+        self.r_conv11 = DupleConv(ch * 12, ch * 4)  #+res3
+        self.r_conv12 = DupleConv(ch * 6, ch * 2)  #+res2
+        self.r_conv13 = DupleConv(ch * 3, ch * 1)  #+res1
 
         self.final = nn.Sequential(BatchNorm(ch+3),
                                    nn.ReLU(),
@@ -2081,13 +2080,19 @@ class ResnetGenerator128_hvita(nn.Module):
         # self.mask_regress = MaskRegressNetv2(num_w)
         self.init_parameter()
 
-    def forward(self, z, bbox, z_im=None, y=None, triples=None, masked_images=None):
+    def forward(self, content):
+        z = content['z']
+        bbox = content['bbox']
+        y = content['label']
+        masked_images = content['image_contents']
+        mask = content['mask']
+        randomly_selected = content['batch_randomly_selected']
+
         b, obj = z.size(0), z.size(1)
-        label_embedding = self.label_embedding(y)
-        # print(label_embedding.shape)
+        label_embedding = self.label_embedding(y[:,randomly_selected[0]])
         # object generator
-        x = self.fc(label_embedding).view(b, -1, 2, 2)
-        # print(x.shape)
+        x = self.fc(label_embedding)
+        x = x.view(b, -1, 2, 2)  # [512, 2, 2]
         x = self.o_conv1(x)
         x = F.interpolate(x, scale_factor=2, mode='nearest')
         x = self.o_conv2(x)
@@ -2100,37 +2105,215 @@ class ResnetGenerator128_hvita(nn.Module):
         x = F.interpolate(x, scale_factor=2, mode='nearest')
         x = self.o_conv6(x)
         x = self.o_final(x)
-        
+        obj_x = x
         # make it bbox and add it to original image
         img_H, img_W = masked_images.size(2), masked_images.size(3)
-        x1, y1, x2, y2 = bbox[:,0,0], bbox[:,0,1], bbox[:,0,2]+bbox[:,0,0], bbox[:,0,3]+bbox[:,0,1]  # [B]
-        patch_h = img_H * (y2-y1)  # [B]
-        patch_w = img_W * (x2-x1)  # [B]
+        zeros = torch.zeros([1], dtype=torch.int).cuda()
+        ones = torch.ones([1], dtype=torch.int).cuda()
+        o_254 = 126 * ones
+        o_255 = 127 * ones
+        x1, y1, x2, y2 = (img_W * bbox[:,0,0]).int(), (img_H * bbox[:,0,1]).int(), (img_W * (bbox[:,0,2]+bbox[:,0,0])).int(), (img_H * (bbox[:,0,3]+bbox[:,0,1])).int()  # [B, 1]
+        x1, y1, x2, y2 = torch.min(torch.max(zeros, x1), o_255-x2+x1-1), torch.min(torch.max(zeros, y1), o_255-y2+y1-1), torch.min(torch.max(x1+1, x2), o_255), torch.min(torch.max(y1+1, y2), o_255)
+        patch_h = abs(y2-y1)  # [B]
+        patch_w = abs(x2-x1)  # [B]
         for i in range(masked_images.size(0)):
             if i == 0:
-                patches = torch.stack((patch_h[i], patch_w[i]), 0)
-                listed_patches = patches.tolist()
-                temp = F.interpolate(x[i].unsqueeze(0), size = (int(listed_patches[0]), int(listed_patches[1])))
-                l_pad = min(max(int(x1[i]*img_W), 0), img_W - temp.size(3))
-                r_pad = img_W - temp.size(3) - l_pad
-                t_pad = min(max(int(y1[i]*img_H), 0), img_H - temp.size(2))
-                b_pad = img_H - temp.size(2) - t_pad
-                # print('[*] width : {}, {}, {}, -height: {}, {}, {}'.format(l_pad, int(listed_patches[0]), r_pad, t_pad, int(listed_patches[1]), b_pad))
+                temp = F.interpolate(x[i].unsqueeze(0), size = (int(patch_h[i].item()), int(patch_w[i].item())))
+                l_pad = x1[i]
+                r_pad = max(img_W - temp.size(3) - l_pad, 0)
+                t_pad = y1[i]
+                b_pad = max(img_H - temp.size(2) - t_pad, 0)
+                # print('[*] l_pad, w, r_pad, t_pad, h, b_pad: {},{},{},{},{},{}'.format(l_pad, temp.size(-1), r_pad, t_pad, temp.size(-2), b_pad))
                 padding = (l_pad, r_pad, t_pad, b_pad)
                 b_temp = temp = F.pad(temp, padding)
             else:
-                patches = torch.stack((patch_h[i], patch_w[i]), 0)
-                listed_patches = patches.tolist()
-                temp = F.interpolate(x[i].unsqueeze(0), size = (int(listed_patches[0]), int(listed_patches[1])))
-                l_pad = min(max(int(x1[i]*img_W), 0), img_W - temp.size(3))
-                r_pad = img_W - temp.size(3) - l_pad
-                t_pad = min(max(int(y1[i]*img_H), 0), img_H - temp.size(2))
-                b_pad = img_H - temp.size(2) - t_pad
-                # print('[*] width : {}, {}, {}, -height: {}, {}, {}'.format(l_pad, int(listed_patches[0]), r_pad, t_pad, int(listed_patches[1]), b_pad))
+                temp = F.interpolate(x[i].unsqueeze(0), size = (int(patch_h[i].item()), int(patch_w[i].item())))
+                l_pad = x1[i]
+                r_pad = max(img_W - temp.size(3) - l_pad, 0)
+                t_pad = y1[i]
+                b_pad = max(img_H - temp.size(2) - t_pad, 0)
+                # print('[*] l_pad, w, r_pad, t_pad, h, b_pad: {},{},{},{},{},{}'.format(l_pad, temp.size(-1), r_pad, t_pad, temp.size(-2), b_pad))
                 padding = (l_pad, r_pad, t_pad, b_pad)
                 temp = F.pad(temp, padding)
                 b_temp = torch.cat((b_temp, temp), 0)
         
+        # print(x.shape, b_temp.shape)
+        x = b_temp
+        x = x * mask + masked_images * (1.-mask)
+        enc_list = list()
+        enc_list.append(x)
+        x = self.r_conv1(x)
+        enc_list.append(x)
+        x = self.r_conv2(x)
+        enc_list.append(x)
+        x = self.r_conv3(x)
+        enc_list.append(x)
+        x = self.r_conv4(x)
+        enc_list.append(x)
+        x = self.r_conv5(x)
+        enc_list.append(x)
+        x = self.r_conv6(x)
+        enc_list.append(x)
+        x = self.r_conv7(x)
+
+        x = F.interpolate(x, scale_factor=2, mode='nearest')
+        x = torch.cat((x, enc_list[len(enc_list)-1]), 1)
+        x = self.r_conv8(x)
+        x = F.interpolate(x, scale_factor=2, mode='nearest')
+        x = torch.cat((x, enc_list[len(enc_list)-2]), 1)
+        x = self.r_conv9(x)
+        x = F.interpolate(x, scale_factor=2, mode='nearest')
+        x = torch.cat((x, enc_list[len(enc_list)-3]), 1)
+        x = self.r_conv10(x)
+        x = F.interpolate(x, scale_factor=2, mode='nearest')
+        x = torch.cat((x, enc_list[len(enc_list)-4]), 1)
+        x = self.r_conv11(x)
+        x = F.interpolate(x, scale_factor=2, mode='nearest')
+        x = torch.cat((x, enc_list[len(enc_list)-5]), 1)
+        x = self.r_conv12(x)
+        x = F.interpolate(x, scale_factor=2, mode='nearest')
+        x = torch.cat((x, enc_list[len(enc_list)-6]), 1)
+        x = self.r_conv13(x)
+        x = F.interpolate(x, scale_factor=2, mode='nearest')
+        x = torch.cat((x, enc_list[len(enc_list)-7]), 1)
+        # to RGB
+        x = self.final(x)
+        return {'image_contents': x, 'object': obj_x}
+
+    def init_parameter(self):
+        for k in self.named_parameters():
+            if k[1].dim() > 1:
+                torch.nn.init.orthogonal_(k[1])
+            if k[0][-4:] == 'bias':
+                torch.nn.init.constant_(k[1], 0)
+
+
+class ResnetGenerator128_hvita_triple(nn.Module):
+    def __init__(self, ch=64, z_dim=128, num_classes=10, pred_classes=46, output_dim=3):
+        super(ResnetGenerator128_hvita_triple, self).__init__()
+        self.num_classes = num_classes
+        self.pre_classes = pred_classes
+        self.label_embedding = nn.Embedding(num_classes, 180)
+        self.pred_embedding = nn.Embedding(pred_classes, 180)
+
+        self.fc = nn.utils.spectral_norm(nn.Linear(11340+128, 2048))
+        self.o_conv1 = DupleConv(ch * 8, ch * 4)  # 2x2
+        self.o_conv2 = DupleConv(ch * 4, ch * 4)  # 4x4
+        self.o_conv3 = DupleConv(ch * 4, ch * 8)  # 8x8
+        self.o_conv4 = DupleConv(ch * 8, ch * 8)  # 16x16
+        self.o_conv5 = DupleConv(ch * 8, ch * 2)  # 32x32
+        self.o_conv6 = DupleConv(ch * 2, ch * 1)  # 64x64
+        self.o_final = nn.Sequential(BatchNorm(ch),
+                                   nn.ReLU(),
+                                   conv2d(ch, output_dim, 3, 1, 1),
+                                   nn.Tanh())
+
+        self.r_conv1 = DupleConv(3, ch, stride=2)  # 64x64
+        self.r_conv2 = DupleConv(ch, ch * 2, stride=2)  # 32x32
+        self.r_conv3 = DupleConv(ch * 2, ch * 4, stride=2)  # 16x16
+        self.r_conv4 = DupleConv(ch * 4, ch * 8, stride=2)  # 8x8
+        self.r_conv5 = DupleConv(ch * 8, ch * 8, stride=2)  # 4x4
+        self.r_conv6 = DupleConv(ch * 8, ch * 8, stride=2)  # 2x2
+        self.r_conv7 = DupleConv(ch * 8, ch * 8, stride=2)  # 1x1
+
+        self.r_conv8 = DupleConv(ch * 16, ch * 8)  #+res6
+        self.r_conv9 = DupleConv(ch * 16, ch * 8)  #+res5
+        self.r_conv10 = DupleConv(ch * 16, ch * 8)  #+res4
+        self.r_conv11 = DupleConv(ch * 12, ch * 4)  #+res3
+        self.r_conv12 = DupleConv(ch * 6, ch * 2)  #+res2
+        self.r_conv13 = DupleConv(ch * 3, ch * 1)  #+res1
+
+        self.final = nn.Sequential(BatchNorm(ch+3),
+                                   nn.ReLU(),
+                                   conv2d(ch+3, output_dim, 3, 1, 1),
+                                   nn.Tanh())
+
+        # mapping function
+        mapping = list()
+        self.mapping = nn.Sequential(*mapping)
+
+        # self.alpha1 = nn.Parameter(torch.zeros(1, num_classes, 1))
+        # self.alpha2 = nn.Parameter(torch.zeros(1, num_classes, 1))
+        # self.alpha3 = nn.Parameter(torch.zeros(1, num_classes, 1))
+        # self.alpha4 = nn.Parameter(torch.zeros(1, num_classes, 1))
+
+        self.sigmoid = nn.Sigmoid()
+
+        # self.mask_regress = MaskRegressNetv2(num_w)
+        self.init_parameter()
+
+    def forward(self, content):
+        z = content['z']
+        bbox = content['bbox']
+        y = content['label']
+        masked_images = content['image_contents']
+        mask = content['mask']
+        triples = content['triples']
+        randomly_selected = content['batch_randomly_selected']
+        b, obj = y.size(0), y.size(1)
+
+        # y = y.expand(-1, obj)
+        s, p, o = triples.chunk(3, dim=-1)  # [B,# of triples, 1]
+        s, p, o = [x.squeeze(-1) for x in [s, p, o]]  # [B, # of triples]
+        s_emb = torch.gather(y, -1, s)
+        sel_p = p.unsqueeze(1).expand(-1, obj, -1) * torch.eq(s_emb.unsqueeze(1).expand(-1, obj, -1), y.unsqueeze(-1).expand(-1, -1, s.size(-1))).long()  # [B, num_o, num_t]
+        sel_o = o.unsqueeze(1).expand(-1, obj, -1) * torch.eq(s_emb.unsqueeze(1).expand(-1, obj, -1), y.unsqueeze(-1).expand(-1, -1, s.size(-1))).long()  # [B, num_o, num_t]
+        obj_triple = torch.cat((y.unsqueeze(-1), sel_o), -1)  # [B, num_o, # of triples + 1]
+        label_embedding = self.label_embedding(obj_triple)  # [B, num_o, # of triples + 1, 180]
+        pred_embedding = self.pred_embedding(sel_p)  # [B, num_o, # of triples, 180]
+        obj_triple_embedding = torch.cat((label_embedding, pred_embedding), 2).view(b, obj, -1)  # [B, num_o, (2 * (# of triples) + 1) * 180]
+        obj_triple_embedding = obj_triple_embedding[:,randomly_selected[0]].squeeze()
+        # print(obj_triple_embedding.shape)
+        # obj_triple_embedding = obj_triple_embedding.view(b * obj, -1)  # [B, num_o, (2 * (# of triples) + 1) * 180 + feat]
+        z = z[:,0,:]
+        w = torch.cat((z, obj_triple_embedding), dim=-1)  # 
+        # object generator
+        x = self.fc(w)
+        x = x.view(b, -1, 2, 2)  # [512, 2, 2]
+        x = self.o_conv1(x)
+        x = F.interpolate(x, scale_factor=2, mode='nearest')
+        x = self.o_conv2(x)
+        x = F.interpolate(x, scale_factor=2, mode='nearest')
+        x = self.o_conv3(x)
+        x = F.interpolate(x, scale_factor=2, mode='nearest')
+        x = self.o_conv4(x)
+        x = F.interpolate(x, scale_factor=2, mode='nearest')
+        x = self.o_conv5(x)
+        x = F.interpolate(x, scale_factor=2, mode='nearest')
+        x = self.o_conv6(x)
+        x = self.o_final(x)
+        obj_x = x
+        # make it bbox and add it to original image
+        img_H, img_W = masked_images.size(2), masked_images.size(3)
+        zeros = torch.zeros([1], dtype=torch.int).cuda()
+        ones = torch.ones([1], dtype=torch.int).cuda()
+        o_254 = 126 * ones
+        o_255 = 127 * ones
+        x1, y1, x2, y2 = (img_W * bbox[:,0,0]).int(), (img_H * bbox[:,0,1]).int(), (img_W * (bbox[:,0,2]+bbox[:,0,0])).int(), (img_H * (bbox[:,0,3]+bbox[:,0,1])).int()  # [B, 1]
+        x1, y1, x2, y2 = torch.min(torch.max(zeros, x1), o_255-x2+x1-1), torch.min(torch.max(zeros, y1), o_255-y2+y1-1), torch.min(torch.max(x1+1, x2), o_255), torch.min(torch.max(y1+1, y2), o_255)
+        patch_h = abs(y2-y1)  # [B]
+        patch_w = abs(x2-x1)  # [B]
+        for i in range(masked_images.size(0)):
+            if i == 0:
+                temp = F.interpolate(x[i].unsqueeze(0), size = (int(patch_h[i].item()), int(patch_w[i].item())))
+                l_pad = x1[i]
+                r_pad = max(img_W - temp.size(3) - l_pad, 0)
+                t_pad = y1[i]
+                b_pad = max(img_H - temp.size(2) - t_pad, 0)
+                # print('[*] l_pad, w, r_pad, t_pad, h, b_pad: {},{},{},{},{},{}'.format(l_pad, temp.size(-1), r_pad, t_pad, temp.size(-2), b_pad))
+                padding = (l_pad, r_pad, t_pad, b_pad)
+                b_temp = temp = F.pad(temp, padding)
+            else:
+                temp = F.interpolate(x[i].unsqueeze(0), size = (int(patch_h[i].item()), int(patch_w[i].item())))
+                l_pad = x1[i]
+                r_pad = max(img_W - temp.size(3) - l_pad, 0)
+                t_pad = y1[i]
+                b_pad = max(img_H - temp.size(2) - t_pad, 0)
+                # print('[*] l_pad, w, r_pad, t_pad, h, b_pad: {},{},{},{},{},{}'.format(l_pad, temp.size(-1), r_pad, t_pad, temp.size(-2), b_pad))
+                padding = (l_pad, r_pad, t_pad, b_pad)
+                temp = F.pad(temp, padding)
+                b_temp = torch.cat((b_temp, temp), 0)
+
         # print(x.shape, b_temp.shape)
         x = b_temp
         x = x + masked_images
@@ -2171,9 +2354,186 @@ class ResnetGenerator128_hvita(nn.Module):
         x = F.interpolate(x, scale_factor=2, mode='nearest')
         x = torch.cat((x, enc_list[len(enc_list)-7]), 1)
         # to RGB
-        # print(x.shape)
         x = self.final(x)
-        return x
+        return {'image_contents': x, 'object': obj_x}
+
+    def init_parameter(self):
+        for k in self.named_parameters():
+            if k[1].dim() > 1:
+                torch.nn.init.orthogonal_(k[1])
+            if k[0][-4:] == 'bias':
+                torch.nn.init.constant_(k[1], 0)
+
+
+class ResnetGenerator128_hvita_triple_partial(nn.Module):
+    def __init__(self, ch=64, z_dim=128, num_classes=10, pred_classes=46, output_dim=3):
+        super(ResnetGenerator128_hvita_triple_partial, self).__init__()
+        self.num_classes = num_classes
+        self.pre_classes = pred_classes
+        self.label_embedding = nn.Embedding(num_classes, 180)
+        self.pred_embedding = nn.Embedding(pred_classes, 180)
+
+        self.fc = nn.utils.spectral_norm(nn.Linear(11340+128, 2048))
+        
+        self.o_conv1 = DupleConv(ch * 8, ch * 4)  # 2x2
+        self.o_conv2 = DupleConv(ch * 4, ch * 4)  # 4x4
+        self.o_conv3 = DupleConv(ch * 4, ch * 8)  # 8x8
+        self.o_conv4 = DupleConv(ch * 8, ch * 8)  # 16x16
+        self.o_conv5 = DupleConv(ch * 8, ch * 2)  # 32x32
+        self.o_conv6 = DupleConv(ch * 2, ch * 1)  # 64x64
+        self.o_final = nn.Sequential(BatchNorm(ch),
+                                   nn.ReLU(),
+                                   conv2d(ch, output_dim, 3, 1, 1),
+                                   nn.Tanh())
+
+        self.r_conv1 = DupleConv(3, ch, stride=2)  # 64x64
+        self.r_conv2 = DupleConv(ch, ch * 2, stride=2)  # 32x32
+        self.r_conv3 = DupleConv(ch * 2, ch * 4, stride=2)  # 16x16
+        self.r_conv4 = DupleConv(ch * 4, ch * 8, stride=2)  # 8x8
+        self.r_conv5 = DupleConv(ch * 8, ch * 8, stride=2)  # 4x4
+        self.r_conv6 = DupleConv(ch * 8, ch * 8, stride=2)  # 2x2
+        self.r_conv7 = DupleConv(ch * 8, ch * 8, stride=2)  # 1x1
+
+        self.r_conv8 = DupleConv(ch * 16, ch * 8)  #+res6
+        self.r_conv9 = DupleConv(ch * 16, ch * 8)  #+res5
+        self.r_conv10 = DupleConv(ch * 16, ch * 8)  #+res4
+        self.r_conv11 = DupleConv(ch * 12, ch * 4)  #+res3
+        self.r_conv12 = DupleConv(ch * 6, ch * 2)  #+res2
+        self.r_conv13 = DupleConv(ch * 3, ch * 1)  #+res1
+
+        self.final = nn.Sequential(BatchNorm(ch+3),
+                                   nn.ReLU(),
+                                   conv2d(ch+3, output_dim, 3, 1, 1),
+                                   nn.Tanh())
+
+        # mapping function
+        mapping = list()
+        self.mapping = nn.Sequential(*mapping)
+
+        # self.alpha1 = nn.Parameter(torch.zeros(1, num_classes, 1))
+        # self.alpha2 = nn.Parameter(torch.zeros(1, num_classes, 1))
+        # self.alpha3 = nn.Parameter(torch.zeros(1, num_classes, 1))
+        # self.alpha4 = nn.Parameter(torch.zeros(1, num_classes, 1))
+
+        self.sigmoid = nn.Sigmoid()
+
+        # self.mask_regress = MaskRegressNetv2(num_w)
+        self.init_parameter()
+
+    def forward(self, content):
+        z = content['z']
+        bbox = content['bbox']
+        y = content['label']
+        masked_images = content['image_contents']
+        mask = content['mask']
+        triples = content['triples']
+        randomly_selected = content['randomly_selected']
+        b, obj = y.size(0), y.size(1)
+
+        # y = y.expand(-1, obj)
+        s, p, o = triples.chunk(3, dim=-1)  # [B,# of triples, 1]
+        s, p, o = [x.squeeze(-1) for x in [s, p, o]]  # [B, # of triples]
+        s_emb = torch.gather(y, -1, s)
+        sel_p = p.unsqueeze(1).expand(-1, obj, -1) * torch.eq(s_emb.unsqueeze(1).expand(-1, obj, -1), y.unsqueeze(-1).expand(-1, -1, s.size(-1))).long()  # [B, num_o, num_t]
+        sel_o = o.unsqueeze(1).expand(-1, obj, -1) * torch.eq(s_emb.unsqueeze(1).expand(-1, obj, -1), y.unsqueeze(-1).expand(-1, -1, s.size(-1))).long()  # [B, num_o, num_t]
+        obj_triple = torch.cat((y.unsqueeze(-1), sel_o), -1)  # [B, num_o, # of triples + 1]
+        label_embedding = self.label_embedding(obj_triple)  # [B, num_o, # of triples + 1, 180]
+        pred_embedding = self.pred_embedding(sel_p)  # [B, num_o, # of triples, 180]
+        obj_triple_embedding = torch.cat((label_embedding, pred_embedding), 2).view(b, obj, -1)  # [B, num_o, (2 * (# of triples) + 1) * 180]
+        obj_triple_embedding = obj_triple_embedding[:,randomly_selected[0]].squeeze()
+        # print(obj_triple_embedding.shape)
+        # obj_triple_embedding = obj_triple_embedding.view(b * obj, -1)  # [B, num_o, (2 * (# of triples) + 1) * 180 + feat]
+        z = z[:,0,:]
+        w = torch.cat((z, obj_triple_embedding), dim=-1)  # 
+        # object generator
+        x = self.fc(w)
+        x = x.view(b, -1, 2, 2)  # [512, 2, 2]
+        x = self.o_conv1(x)
+        x = F.interpolate(x, scale_factor=2, mode='nearest')
+        x = self.o_conv2(x)
+        x = F.interpolate(x, scale_factor=2, mode='nearest')
+        x = self.o_conv3(x)
+        x = F.interpolate(x, scale_factor=2, mode='nearest')
+        x = self.o_conv4(x)
+        x = F.interpolate(x, scale_factor=2, mode='nearest')
+        x = self.o_conv5(x)
+        x = F.interpolate(x, scale_factor=2, mode='nearest')
+        x = self.o_conv6(x)
+        x = self.o_final(x)
+        obj_x = x
+        # make it bbox and add it to original image
+        img_H, img_W = masked_images.size(2), masked_images.size(3)
+        zeros = torch.zeros([1], dtype=torch.int).cuda()
+        ones = torch.ones([1], dtype=torch.int).cuda()
+        o_254 = 126 * ones
+        o_255 = 127 * ones
+        x1, y1, x2, y2 = (img_W * bbox[:,0,0]).int(), (img_H * bbox[:,0,1]).int(), (img_W * (bbox[:,0,2]+bbox[:,0,0])).int(), (img_H * (bbox[:,0,3]+bbox[:,0,1])).int()  # [B, 1]
+        x1, y1, x2, y2 = torch.min(torch.max(zeros, x1), o_255-x2+x1-1), torch.min(torch.max(zeros, y1), o_255-y2+y1-1), torch.min(torch.max(x1+1, x2), o_255), torch.min(torch.max(y1+1, y2), o_255)
+        patch_h = abs(y2-y1)  # [B]
+        patch_w = abs(x2-x1)  # [B]
+        for i in range(masked_images.size(0)):
+            if i == 0:
+                temp = F.interpolate(x[i].unsqueeze(0), size = (int(patch_h[i].item()), int(patch_w[i].item())))
+                l_pad = x1[i]
+                r_pad = max(img_W - temp.size(3) - l_pad, 0)
+                t_pad = y1[i]
+                b_pad = max(img_H - temp.size(2) - t_pad, 0)
+                # print('[*] l_pad, w, r_pad, t_pad, h, b_pad: {},{},{},{},{},{}'.format(l_pad, temp.size(-1), r_pad, t_pad, temp.size(-2), b_pad))
+                padding = (l_pad, r_pad, t_pad, b_pad)
+                b_temp = temp = F.pad(temp, padding)
+            else:
+                temp = F.interpolate(x[i].unsqueeze(0), size = (int(patch_h[i].item()), int(patch_w[i].item())))
+                l_pad = x1[i]
+                r_pad = max(img_W - temp.size(3) - l_pad, 0)
+                t_pad = y1[i]
+                b_pad = max(img_H - temp.size(2) - t_pad, 0)
+                # print('[*] l_pad, w, r_pad, t_pad, h, b_pad: {},{},{},{},{},{}'.format(l_pad, temp.size(-1), r_pad, t_pad, temp.size(-2), b_pad))
+                padding = (l_pad, r_pad, t_pad, b_pad)
+                temp = F.pad(temp, padding)
+                b_temp = torch.cat((b_temp, temp), 0)
+
+        # print(x.shape, b_temp.shape)
+        x = b_temp
+        x = x + masked_images
+        enc_list = list()
+        enc_list.append(x)
+        x = self.r_conv1(x)
+        enc_list.append(x)
+        x = self.r_conv2(x)
+        enc_list.append(x)
+        x = self.r_conv3(x)
+        enc_list.append(x)
+        x = self.r_conv4(x)
+        enc_list.append(x)
+        x = self.r_conv5(x)
+        enc_list.append(x)
+        x = self.r_conv6(x)
+        enc_list.append(x)
+        x = self.r_conv7(x)
+
+        x = F.interpolate(x, scale_factor=2, mode='nearest')
+        x = torch.cat((x, enc_list[len(enc_list)-1]), 1)
+        x = self.r_conv8(x)
+        x = F.interpolate(x, scale_factor=2, mode='nearest')
+        x = torch.cat((x, enc_list[len(enc_list)-2]), 1)
+        x = self.r_conv9(x)
+        x = F.interpolate(x, scale_factor=2, mode='nearest')
+        x = torch.cat((x, enc_list[len(enc_list)-3]), 1)
+        x = self.r_conv10(x)
+        x = F.interpolate(x, scale_factor=2, mode='nearest')
+        x = torch.cat((x, enc_list[len(enc_list)-4]), 1)
+        x = self.r_conv11(x)
+        x = F.interpolate(x, scale_factor=2, mode='nearest')
+        x = torch.cat((x, enc_list[len(enc_list)-5]), 1)
+        x = self.r_conv12(x)
+        x = F.interpolate(x, scale_factor=2, mode='nearest')
+        x = torch.cat((x, enc_list[len(enc_list)-6]), 1)
+        x = self.r_conv13(x)
+        x = F.interpolate(x, scale_factor=2, mode='nearest')
+        x = torch.cat((x, enc_list[len(enc_list)-7]), 1)
+        # to RGB
+        x = self.final(x)
+        return {'image_contents': x, 'object': obj_x}
 
     def init_parameter(self):
         for k in self.named_parameters():
@@ -2584,7 +2944,7 @@ class ResBlock(nn.Module):
 
 
 class DupleConv(nn.Module):
-    def __init__(self, in_ch, out_ch, h_ch=None, ksize=3, stride=1, pad=1, num_w=128, predict_mask=True, psp_module=False):
+    def __init__(self, in_ch, out_ch, h_ch=None, ksize=3, stride=1, pad=1, predict_mask=True, psp_module=False):
         super(DupleConv, self).__init__()
         self.h_ch = h_ch if h_ch else out_ch
         self.conv1 = conv2d(in_ch, self.h_ch, ksize, stride=stride, pad=pad)

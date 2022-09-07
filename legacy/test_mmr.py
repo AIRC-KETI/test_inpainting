@@ -114,7 +114,8 @@ def main(args):
     ssim, psnr, lpips = piq.ssim, piq.psnr, piq.LPIPS()
     count = 0
     batch_count = 0
-    
+    reamin_ratio = 0.05
+    tau = 0.025
     for epoch in range(args.start_epoch, args.total_epoch):
         netG.eval()
         with torch.no_grad():
@@ -133,7 +134,6 @@ def main(args):
                 fake_images = fake_images_dict['image_contents'] * mask + masked_images * (1.-mask)
                 
                 for i in range(real_images.size(0)):
-                    # torchvision.utils.save_image((fake_images[i] - torch.min(fake_images[i]))/(torch.max(fake_images[i]) - torch.min(fake_images[i])+1.e-6), "{}/samples/{}_fake_{:06d}_{:06d}_{:06d}.jpg".format(args.out_path, args.dataset, epoch, idx, i))
                     torchvision.utils.save_image((masked_images[i]+1.)/2., "{}/masked_images/{}_fake_{:06d}_{:06d}_{:06d}.jpg".format(args.out_path, args.dataset, epoch, idx, i), value_range=(0., 1.))
                     torchvision.utils.save_image(mask[i], "{}/masks/{}_fake_{:06d}_{:06d}_{:06d}.jpg".format(args.out_path, args.dataset, epoch, idx, i), value_range=(0., 1.))
                     torchvision.utils.save_image((fake_images[i]+1.)/2., "{}/samples/{}_fake_{:06d}_{:06d}_{:06d}.jpg".format(args.out_path, args.dataset, epoch, idx, i), value_range=(0., 1.))

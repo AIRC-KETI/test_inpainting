@@ -142,7 +142,7 @@ class VgSceneGraphDataset(Dataset):
             # boxes.append(np.array([-0.6, -0.6, 0.5, 0.5]))
             objs[i] = self.vocab['object_name_to_idx']['__image__']
             # texts[i] = '__image__'
-            boxes[i] = torch.FloatTensor([-0.0, -0.0, 1.0, 1.0])
+            boxes[i] = torch.FloatTensor([-0.6, -0.6, 0.5, 0.5])
 
         triples = []
         for r_idx in range(self.data['relationships_per_image'][index].item()):
@@ -154,7 +154,8 @@ class VgSceneGraphDataset(Dataset):
             s = obj_idx_mapping.get(s, None)
             o = obj_idx_mapping.get(o, None)
             if s is not None and o is not None:
-                triples.append([s, p, o])
+                temp_p = p+1 if p <45 else 0
+                triples.append([s, temp_p, o])
         #
         # # Add dummy __in_image__ relationships for all objects
         in_image = self.vocab['pred_name_to_idx']['__in_image__']

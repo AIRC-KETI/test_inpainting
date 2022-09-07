@@ -3,8 +3,15 @@ import torch
 import torch.nn as nn
 from torchvision import models
 import torch.nn.functional as F
-import sys
 from typing import Tuple
+
+
+def total_variation_loss(img, weight=1):
+     bs_img, c_img, h_img, w_img = img.size()
+     tv_h = torch.pow(img[:,:,1:,:]-img[:,:,:-1,:], 2).sum()
+     tv_w = torch.pow(img[:,:,:,1:]-img[:,:,:,:-1], 2).sum()
+     return weight*(tv_h+tv_w)/(bs_img*c_img*h_img*w_img)
+
 
 def crop_resize(image, bbox, imsize=64, cropsize=28, label=None):
     """"
@@ -80,6 +87,32 @@ class Vgg19(torch.nn.Module):
         return out
 
 
+class MyVGGLoss(nn.Module):
+    def __init__(self):
+        super(MyVGGLoss, self).__init__()
+        self.vgg = Vgg19().cuda()
+        self.criterion = nn.L1Loss()
+        self.weights = [1.0 / 32, 1.0 / 16, 1.0 / 8, 1.0 / 4, 1.0]
+
+    def forward(self, x, y):
+        x_vgg, y_vgg = self.vgg(x), self.vgg(y)
+        perc_loss, gram_loss = 0, 0
+        for i in range(len(x_vgg)):
+            x_gram = self.gram(x_vgg[i])
+            y_gram = self.gram(y_vgg[i].detach())
+            perc_loss += self.weights[i] * self.criterion(x_vgg[i], y_vgg[i].detach()).mean()
+            gram_loss += torch.abs(y_gram - x_gram).mean()
+        
+        return perc_loss, gram_loss
+    
+    def gram(self, x):
+        n, c, h, w = x.size()
+        x_feat = x.view(n, c, -1)
+        x_t = torch.transpose(x_feat, -1, -2)
+        x_gram = torch.bmm(x_feat, x_t)/(c * h * w)
+        return x_gram
+
+
 class VGGLoss(nn.Module):
     def __init__(self):
         super(VGGLoss, self).__init__()
@@ -94,6 +127,23 @@ class VGGLoss(nn.Module):
             loss += self.weights[i] * self.criterion(x_vgg[i], y_vgg[i].detach())
         return loss
 
+
+class GramLoss(nn.Module):
+    def __init__(self):
+        super(GramLoss, self).__init__()
+        self.vgg = Vgg19().cuda()
+        # self.criterion = nn.L1Loss()
+        self.weights = [1.0 / 32, 1.0 / 16, 1.0 / 8, 1.0 / 4, 1.0]
+
+    def forward(self, x, y):
+        x_vgg, y_vgg = self.vgg(x), self.vgg(y)
+        loss = 0
+        for i in range(len(x_vgg)):
+            n, c = x_vgg[i].size(0), x_vgg[i].size(1)
+            x_feat, y_feat = x_vgg[i].view(n, c, -1), torch.transpose(y_vgg[i].detach().view(n, c, -1), -1, -2)
+            # print(x_feat.shape, y_feat.shape)
+            loss += self.weights[i] * torch.bmm(x_feat, y_feat).mean()
+        return loss
 
 
 class ContrastiveLoss(nn.Module):
@@ -196,17 +246,69 @@ class Inceptionv3OnlyFeature(torch.nn.Module):
         # N x 1000 (num_classes)
         return feat, x
 
+def correlation_loss(y_pred, y_true):
+    x = y_pred.clone()
+    y = y_true.clone()
+    vx = x - torch.mean(x)
+    vy = y - torch.mean(y)
+    cov = torch.sum(vx * vy)
+    corr = cov / (torch.sqrt(torch.sum(vx ** 2)) * torch.sqrt(torch.sum(vy ** 2)) + 1e-12)
+    corr = torch.maximum(torch.minimum(corr,torch.tensor(1)), torch.tensor(-1))
+    return torch.sub(torch.tensor(1), corr ** 2)
+
+def one_hot_to_rgb(layout, colors):
+    num_objs = list(layout.size())[1]
+    colors = colors[:num_objs, :]
+    # one_hot_3d = np.einsum('abcd,de->abce', layouts, colors)
+    one_hot_3d = torch.sum(layout.unsqueeze(2)*colors.view(1, num_objs, 3, 1, 1), dim=1)
+
+    return one_hot_3d
+
+
+class TimeRecord(object):
+    def __init__(self):
+        self.record = []
+
+    def add(self, t):
+        self.record.append(t)
+
+    def top(self):
+        return self.record[-1]
+
+    def avg(self):
+        num = len(self.record) - 1
+        if num > 0:
+            total = sum(self.record[1:])
+            return total / num
+        else:
+            return 0
+
+
+class FeatLoss(nn.Module):
+    def __init__(self):
+        super(FeatLoss, self).__init__()
+        self.criterionFeat = torch.nn.L1Loss()
+
+    def forward(self, pred_fake, pred_real):
+        loss_G_GAN_Feat = 0
+        nums_d = len(pred_fake)
+        feat_weights = 4.0 / len(pred_fake[0])
+        D_weights = 1.0 / nums_d
+        for i in range(nums_d):
+            for j in range(len(pred_fake[i]) - 1):
+                loss_G_GAN_Feat += D_weights * feat_weights * \
+                                   self.criterionFeat(pred_fake[i][j], pred_real[i][j].detach())
+        return loss_G_GAN_Feat
+
 
 def compute_metric(x_features: torch.Tensor, y_features: torch.Tensor) -> torch.Tensor:
         r"""
         Fits multivariate Gaussians: :math:`X \sim \mathcal{N}(\mu_x, \sigma_x)` and
         :math:`Y \sim \mathcal{N}(\mu_y, \sigma_y)` to image stacks.
         Then computes FID as :math:`d^2 = ||\mu_x - \mu_y||^2 + Tr(\sigma_x + \sigma_y - 2\sqrt{\sigma_x \sigma_y})`.
-
         Args:
             x_features: Samples from data distribution. Shape :math:`(N_x, D)`
             y_features: Samples from data distribution. Shape :math:`(N_y, D)`
-
         Returns:
             The Frechet Distance.
         """
@@ -264,14 +366,12 @@ def _compute_fid(mu1: torch.Tensor, sigma1: torch.Tensor, mu2: torch.Tensor, sig
     The Frechet Inception Distance between two multivariate Gaussians X_x ~ N(mu_1, sigm_1)
     and X_y ~ N(mu_2, sigm_2) is
         d^2 = ||mu_1 - mu_2||^2 + Tr(sigm_1 + sigm_2 - 2*sqrt(sigm_1*sigm_2)).
-
     Args:
         mu1: mean of activations calculated on predicted (x) samples
         sigma1: covariance matrix over activations calculated on predicted (x) samples
         mu2: mean of activations calculated on target (y) samples
         sigma2: covariance matrix over activations calculated on target (y) samples
         eps: offset constant. used if sigma_1 @ sigma_2 matrix is singular
-
     Returns:
         Scalar value of the distance between sets.
     """
@@ -290,12 +390,10 @@ def _compute_fid(mu1: torch.Tensor, sigma1: torch.Tensor, mu2: torch.Tensor, sig
 
 def _cov(m: torch.Tensor, rowvar: bool = True) -> torch.Tensor:
     r"""Estimate a covariance matrix given data.
-
     Covariance indicates the level to which two variables vary together.
     If we examine N-dimensional samples, `X = [x_1, x_2, ... x_N]^T`,
     then the covariance matrix element `C_{ij}` is the covariance of
     `x_i` and `x_j`. The element `C_{ii}` is the variance of `x_i`.
-
     Args:
         m: A 1-D or 2-D array containing multiple variables and observations.
             Each row of `m` represents a variable, and each column a single
@@ -304,7 +402,6 @@ def _cov(m: torch.Tensor, rowvar: bool = True) -> torch.Tensor:
             variable, with observations in the columns. Otherwise, the
             relationship is transposed: each column represents a variable,
             while the rows contain observations.
-
     Returns:
         The covariance matrix of the variables.
     """
@@ -336,21 +433,16 @@ def _compute_statistics(samples: torch.Tensor) -> Tuple[torch.Tensor, torch.Tens
 def inception_score(features: torch.Tensor, num_splits: int = 10):
     r"""Compute Inception Score for a list of image features.
     Expects raw logits from Inception-V3 as input.
-
     Args:
         features (torch.Tensor): Low-dimension representation of image set. Shape (N_samples, encoder_dim).
         num_splits: Number of parts to divide features. Inception Score is computed for them separately and
             results are then averaged.
-
     Returns:
         score
-
         variance
-
     References:
         "A Note on the Inception Score"
         https://arxiv.org/pdf/1801.01973.pdf
-
     """
     assert len(features.shape) == 2, \
         f"Features must have shape (N_samples, encoder_dim), got {features.shape}"
@@ -376,3 +468,14 @@ def inception_score(features: torch.Tensor, num_splits: int = 10):
 
     partial_scores = torch.tensor(partial_scores)
     return torch.mean(partial_scores).to(features), torch.std(partial_scores).to(features)
+
+
+def sfid(real, fake):
+    real_mean, real_var = torch.var_mean(real, 0)
+    fake_mean, fake_var = torch.var_mean(fake, 0)
+    real_sigma = torch.sqrt(real_var+1.e-6)
+    fake_sigma = torch.sqrt(fake_var+1.e-6)
+    print(torch.square(real_mean - fake_mean).shape)
+    print(torch.square(real_mean - fake_mean).mean())
+    print(torch.square(real_sigma-fake_sigma).mean()//(real.size(1) * real.size(2) * real.size(3)))
+    return (torch.square(real_mean - fake_mean) + torch.square(real_sigma-fake_sigma)/(real.size(1) * real.size(2) * real.size(3))).mean()

@@ -13,8 +13,10 @@ In this test, the following metrics are evaluated.
 - [X] Learned Perceptual Image Patch Similarity (LPIPS, SSL 2-1 metric)
 - [X] Inception Score (IS)
 - [X] Frechet Inception Distance (FID, SSL 2-2 metric) 
-- [ ] The size of the smallest part that can be reconstructed (SSL 1-2 metric, COCO and VG only)
+- [ ] The size of the smallest part that can be reconstructed (SSL 1-2 metric, COCO and VG only) *
 - [ ] Restoration success rate of noise / part deletion video (SSL 3 metric, COCO and VG only)
+
+Note*: The ratio of the widest mask to the original that satisfies the L1 loss of 5% or less between the reconstructed image and the original image
 
 ## Requirements
 please see [INSTALL.md](INSTALL.md).

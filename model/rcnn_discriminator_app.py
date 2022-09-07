@@ -81,6 +81,102 @@ class ResnetDiscriminator128(nn.Module):
         return out_im, out_obj
 
 
+class HVITADiscriminator128(nn.Module):
+    def __init__(self, input_dim=3, ch=64):
+        super(HVITADiscriminator128, self).__init__()
+        self.block1 = OptimizedBlock(3, ch, downsample=True)
+        self.block2 = ResBlock(ch, ch * 2, downsample=True)
+        self.block3 = ResBlock(ch * 2, ch * 4, downsample=True)
+        self.block4 = ResBlock(ch * 4, ch * 8, downsample=True)
+        self.block5 = ResBlock(ch * 8, ch * 16, downsample=True)
+        self.block6 = ResBlock(ch * 16, ch * 16, downsample=False)
+        self.l7 = nn.utils.spectral_norm(nn.Linear(ch * 16, 1))
+        self.activation = nn.ReLU()
+
+    def forward(self, x, y=None):
+        b = x.size(0)
+        x = self.block1(x)
+        x1 = self.block2(x)
+        x2 = self.block3(x1)
+        x = self.block4(x2)
+        x = self.block5(x)
+        x = self.block6(x)
+        x = self.activation(x)
+        x = torch.sum(x, dim=(2, 3))
+        out_im = self.l7(x)
+        return out_im
+
+
+class HVITADiscriminator64(nn.Module):
+    def __init__(self, num_classes=0, input_dim=3, ch=64):
+        super(HVITADiscriminator64, self).__init__()
+        self.block1 = OptimizedBlock(3, ch, downsample=True)
+        self.block2 = ResBlock(ch, ch * 2, downsample=True)
+        self.block3 = ResBlock(ch * 2, ch * 4, downsample=True)
+        self.block4 = ResBlock(ch * 4, ch * 8, downsample=True)
+        self.block5 = ResBlock(ch * 8, ch * 16, downsample=True)
+        self.l7 = nn.utils.spectral_norm(nn.Linear(ch * 16 + 20, 1))
+        self.activation = nn.ReLU()
+        self.label_embedding = nn.Embedding(num_classes, 20)
+
+    def forward(self, x, y=None):
+        y = self.label_embedding(y)
+        b = x.size(0)
+        x = self.block1(x)
+        x1 = self.block2(x)
+        x2 = self.block3(x1)
+        x = self.block4(x2)
+        x = self.block5(x)
+        x = self.activation(x)
+        x = torch.sum(x, dim=(2, 3))
+        x = torch.cat((x, y), dim=-1)
+        out_im = self.l7(x)
+        return out_im
+
+
+class HVITADiscriminator64_triple(nn.Module):
+    def __init__(self, num_classes=179, input_dim=3, pred_classes=46, ch=64):
+        super(HVITADiscriminator64_triple, self).__init__()
+        self.label_embedding = nn.Embedding(num_classes, 180)
+        self.pred_embedding = nn.Embedding(pred_classes, 180)
+        self.fc = nn.utils.spectral_norm(nn.Linear(11340, 2048))
+
+        self.block1 = OptimizedBlock(3, ch, downsample=True)
+        self.block2 = ResBlock(ch, ch * 2, downsample=True)
+        self.block3 = ResBlock(ch * 2, ch * 4, downsample=True)
+        self.block4 = ResBlock(ch * 4, ch * 8, downsample=True)
+        self.block5 = ResBlock(ch * 8, ch * 16, downsample=True)
+        self.l7 = nn.utils.spectral_norm(nn.Linear(ch * 16 + 2048, 1))
+        self.activation = nn.ReLU()
+
+    def forward(self, x, y=None, triples=None, randomly_selected=None):
+        b, obj = y.size(0), y.size(1)
+        s, p, o = triples.chunk(3, dim=-1)  # [B,# of triples, 1]
+        s, p, o = [x.squeeze(-1) for x in [s, p, o]]  # [B, # of triples]
+        s_emb = torch.gather(y, -1, s)
+        sel_p = p.unsqueeze(1).expand(-1, obj, -1) * torch.eq(s_emb.unsqueeze(1).expand(-1, obj, -1), y.unsqueeze(-1).expand(-1, -1, s.size(-1))).long()  # [B, num_o, num_t]
+        sel_o = o.unsqueeze(1).expand(-1, obj, -1) * torch.eq(s_emb.unsqueeze(1).expand(-1, obj, -1), y.unsqueeze(-1).expand(-1, -1, s.size(-1))).long()  # [B, num_o, num_t]
+        obj_triple = torch.cat((y.unsqueeze(-1), sel_o), -1)  # [B, num_o, # of triples + 1]
+        label_embedding = self.label_embedding(obj_triple)  # [B, num_o, # of triples + 1, 180]
+        pred_embedding = self.pred_embedding(sel_p)  # [B, num_o, # of triples, 180]
+        obj_triple_embedding = torch.cat((label_embedding, pred_embedding), 2).view(b, obj, -1)  # [B, num_o, (2 * (# of triples) + 1) * 180]
+        obj_triple_embedding = obj_triple_embedding[:,randomly_selected[0]].squeeze()
+        # print(obj_triple_embedding.shape)
+        # obj_triple_embedding = obj_triple_embedding.view(b * obj, -1)  # [B, num_o, (2 * (# of triples) + 1) * 180 + feat]
+        # object generator
+        y = self.fc(obj_triple_embedding)
+        x = self.block1(x)
+        x1 = self.block2(x)
+        x2 = self.block3(x1)
+        x = self.block4(x2)
+        x = self.block5(x)
+        x = self.activation(x)
+        x = torch.sum(x, dim=(2, 3))
+        x = torch.cat((x, y), dim=-1)
+        out_im = self.l7(x)
+        return out_im
+
+
 class ResnetDiscriminator128_segment(nn.Module):
     def __init__(self, num_classes=0, input_dim=3, ch=64):
         super(ResnetDiscriminator128_segment, self).__init__()

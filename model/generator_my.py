@@ -34,11 +34,11 @@ class TripleGenerator(nn.Module):
         self.enc4 = GatedConv(ch * 4, ch*8, stride=2)  # 8x8
         self.enc5 = GatedConv(ch * 8, ch*16, stride=2)  # 4x4
 
-        self.res1 = ResBlock(ch * 32, ch * 16, upsample=True, num_w=num_w)
-        self.res2 = ResBlock(ch * 24, ch * 8, upsample=True, num_w=num_w)
-        self.res3 = ResBlock(ch * 12, ch * 4, upsample=True, num_w=num_w)
-        self.res4 = ResBlock(ch * 6, ch * 2, upsample=True, num_w=num_w, psp_module=True)
-        self.res5 = ResBlock(ch * 3, ch * 1, upsample=True, num_w=num_w, predict_mask=False)
+        self.res1 = ResBlock(ch * 32, ch * 16, upsample=True, num_w=num_w)  # ch * (32+16)
+        self.res2 = ResBlock(ch * 24, ch * 8, upsample=True, num_w=num_w)  # ch * (16+8)
+        self.res3 = ResBlock(ch * 12, ch * 4, upsample=True, num_w=num_w)  # ch * (8+4)
+        self.res4 = ResBlock(ch * 6, ch * 2, upsample=True, num_w=num_w, psp_module=True)  # ch * (4+2)
+        self.res5 = ResBlock(ch * 3, ch * 1, upsample=True, num_w=num_w, predict_mask=False)  # ch * (2+1)
         self.final = nn.Sequential(BatchNorm(ch),
                                    nn.ReLU(),
                                    conv2d(ch, output_dim, 3, 1, 1),
@@ -59,20 +59,13 @@ class TripleGenerator(nn.Module):
         self.mask_regress = MaskRegressNetv3(num_w)
         self.init_parameter()
 
-    def forward(self, content):
-        bbox = content['bbox']
-        y = content['label']
-        triples = content['triples']
-        masked_images = content['image_contents']
-        mask = content['mask']
-        masked_images = torch.cat((masked_images, mask), 1)
+    def forward(self, z, bbox=None, z_im=None, y=None, triples=None, masked_images=None):
         enc_1 = m = self.enc1(masked_images)
         enc_2 = m = self.enc2(m)
         enc_3 = m = self.enc3(m)
         enc_4 = m = self.enc4(m)
         enc_5 = m = self.enc5(m)
 
-        z = torch.randn(masked_images.size(0), y.size(-1), 128).to('cuda')
         b, obj = z.size(0), z.size(1)
         label_embedding = self.label_embedding(y)
         z = z.view(b * obj, -1)
@@ -86,12 +79,15 @@ class TripleGenerator(nn.Module):
         pred_embedding = self.pred_embedding(p)  # [B, # of triples, 180]
         s_label_embedding, o_label_embedding = label_embedding.chunk(2, dim=0)  # [B, # of triples, 180]
         total_embedding = torch.cat((s_label_embedding, pred_embedding, o_label_embedding), -1).view(b * obj, -1)
-        w = torch.cat((z, total_embedding), dim=-1)
-        o_bbox = torch.gather(bbox, 1, o.view(b, obj, -1).expand(b, obj, 4))
-        s_mask, o_mask = self.mask_regress(w, bbox, o_bbox)
-        bmask = 0.5 * (s_mask + torch.gather(o_mask, 1, o.view(b, obj, 1, 1).expand(-1, -1, o_mask.size(-2), o_mask.size(-1))))
+        w = torch.cat((z, total_embedding), dim=-1)  # [s,p,o] with order
+        s_bbox = torch.gather(bbox, 1, s.view(b, obj, -1).expand(b, obj, 4))  # order bbox by s
+        o_bbox = torch.gather(bbox, 1, o.view(b, obj, -1).expand(b, obj, 4))  # order bbox by o
+        s_mask, o_mask = self.mask_regress(w, s_bbox, o_bbox)  # generated masks with order
+        bmask = 0.5 * (s_mask + o_mask)
 
-        z_im = torch.randn((b, 128), device=z.device)
+        if z_im is None:
+            z_im = torch.randn((b, 128), device=z.device)
+
         bbox_mask_ = bbox_mask(z, bbox, 64, 64)
 
         # 4x4
@@ -139,7 +135,323 @@ class TripleGenerator(nn.Module):
 
         # to RGB
         x = self.final(x)
-        return {'image_contents': x}
+        return x
+
+    def init_parameter(self):
+        for k in self.named_parameters():
+            if k[1].dim() > 1:
+                torch.nn.init.orthogonal_(k[1])
+            if k[0][-4:] == 'bias':
+                torch.nn.init.constant_(k[1], 0)
+
+
+class TripleGenerator_v2(nn.Module):
+    def __init__(self, ch=16, z_dim=128, num_classes=10, pred_classes=7, output_dim=3, emb_dim=180, num_t=31):
+        super(TripleGenerator_v2, self).__init__()
+        self.num_classes = num_classes
+        self.pred_classes = pred_classes
+
+        self.label_embedding = nn.Embedding(num_classes, emb_dim)
+        self.pred_embedding = nn.Embedding(pred_classes, emb_dim)
+
+        num_w = 512
+        self.z_dim = z_dim
+        self.proj = nn.utils.spectral_norm(nn.Linear(z_dim + emb_dim*(2*num_t+1)+512*2*2, num_w))
+        self.fc = nn.utils.spectral_norm(nn.Linear(z_dim, 4 * 4 * 32 * ch))
+
+        self.enc1 = GatedConv(4, ch*1, stride=2)  # 8x128x128
+        self.enc2 = GatedConv(ch * 1, ch * 2, stride=2)  # 16x64x64
+        self.enc3 = GatedConv(ch * 2, ch * 4, stride=2)  # 32x32x32
+        self.enc4 = GatedConv(ch * 4, ch * 8, stride=2)  # 64x16x16
+        self.enc5 = GatedConv(ch * 8, ch * 16, stride=2)  # 128x8x8
+        self.enc6 = GatedConv(ch * 16, ch * 32, stride=2)  # 256x4x4
+        self.enc7 = GatedConv(ch * 32, ch * 32, stride=2)  # 512x2x2
+
+        self.res1 = ResBlock(ch * 64, ch * 32, upsample=True, num_w=num_w)  # ch * (32+16)
+        self.res2 = ResBlock(ch * 48, ch * 16, upsample=True, num_w=num_w)  # ch * (16+8)
+        self.res3 = ResBlock(ch * 24, ch * 8, upsample=True, num_w=num_w)  # ch * (8+4)
+        self.res4 = ResBlock(ch * 12, ch * 4, upsample=True, num_w=num_w)  # ch * (4+2)
+        self.res5 = ResBlock(ch * 6, ch * 2, upsample=True, num_w=num_w)  # ch * (2+1)
+        self.res6 = ResBlock(ch * 3, ch * 1, upsample=True, num_w=num_w, predict_mask=False)  # ch * (2+1)
+
+        self.final = nn.Sequential(BatchNorm(ch),
+                                   nn.ReLU(),
+                                   conv2d(ch, output_dim, 3, 1, 1),
+                                   nn.Tanh())
+
+        self.alpha1 = nn.Parameter(torch.zeros(1, num_classes, 1))
+        self.alpha2 = nn.Parameter(torch.zeros(1, num_classes, 1))
+        self.alpha3 = nn.Parameter(torch.zeros(1, num_classes, 1))
+        self.alpha4 = nn.Parameter(torch.zeros(1, num_classes, 1))
+        self.alpha5 = nn.Parameter(torch.zeros(1, num_classes, 1))
+
+        self.sigmoid = nn.Sigmoid()
+
+        self.mask_regress = MaskRegressNetv2(num_w)
+        self.init_parameter()
+    
+    def forward(self, content):
+        z = None
+        bbox = content['bbox']
+        y = content['label']
+        triples = content['triples']
+        masked_images = content['image_contents']
+        mask = content['mask']
+        hw = content['hw']
+        # ===================================Encoder===================================
+        # image, mask = torch.split(masked_images, [3, 1], dim=1)
+        masked_images = F.interpolate(torch.cat((masked_images, mask), 1), (256, 256))
+        enc_1 = m = self.enc1(masked_images)
+        enc_2 = m = self.enc2(m)
+        enc_3 = m = self.enc3(m)
+        enc_4 = m = self.enc4(m)
+        enc_5 = m = self.enc5(m)
+        enc_6 = m = self.enc6(m)
+        m = self.enc7(m)
+
+        # ===================================Embedding===================================
+        b, obj = y.size(0), y.size(1)
+        if z is None:
+            z = torch.randn(b, obj, self.z_dim).cuda()
+
+        z = z.view(b * obj, -1)
+        s, p, o = triples.chunk(3, dim=-1)  # [B,# of triples, 1]
+        s, p, o = [x.squeeze(-1) for x in [s, p, o]]  # [B, # of triples]
+        s_emb = torch.gather(y, -1, s)
+        sel_p = p.unsqueeze(1).expand(-1, obj, -1) * torch.eq(s_emb.unsqueeze(1).expand(-1, obj, -1), y.unsqueeze(-1).expand(-1, -1, s.size(-1))).long()  # [B, num_o, num_t]
+        sel_o = o.unsqueeze(1).expand(-1, obj, -1) * torch.eq(s_emb.unsqueeze(1).expand(-1, obj, -1), y.unsqueeze(-1).expand(-1, -1, s.size(-1))).long()  # [B, num_o, num_t]
+        obj_triple = torch.cat((y.unsqueeze(-1), sel_o), -1)  # [B, num_o, # of triples + 1]
+        label_embedding = self.label_embedding(obj_triple)  # [B, num_o, # of triples + 1, 180]
+        pred_embedding = self.pred_embedding(sel_p)  # [B, num_o, # of triples, 180]      
+        obj_triple_embedding = torch.cat((label_embedding, pred_embedding), 2).view(b, obj, -1)  # [B, num_o, (2 * (# of triples) + 1) * 180]
+        obj_triple_embedding = torch.cat((obj_triple_embedding, m.view(b, -1).unsqueeze(1).expand(-1, obj, -1)), -1).view(b * obj, -1)  # [B, num_o, (2 * (# of triples) + 1) * 180 + feat]
+        w = torch.cat((z, obj_triple_embedding), dim=-1)  # 
+        w = self.proj(w)
+        bmask = self.mask_regress(w, bbox)
+        bbox_mask_ = bbox_mask(z, bbox, 64, 64)
+
+        # ===================================Decoder===================================
+        # print(m.shape, self.fc)
+        hh, ww = enc_6.size(2), enc_6.size(3)
+        x = F.interpolate(m, size=(hh, ww), mode='bilinear')
+        # 8x8
+        x = torch.cat((x, enc_6), dim=1)
+        x, stage_mask = self.res1(x, w, bmask)
+
+        # 16x16
+        hh, ww = x.size(2), x.size(3)
+        seman_bbox = batched_index_select(stage_mask, dim=1, index=y.view(b, obj, 1, 1))  # size (b, num_o, h, w)
+        seman_bbox = torch.sigmoid(seman_bbox) * F.interpolate(bbox_mask_, size=(hh, ww), mode='nearest')
+        alpha1 = torch.gather(self.sigmoid(self.alpha1).expand(b, -1, -1), dim=1, index=y.view(b, obj, 1)).unsqueeze(-1)
+        stage_bbox = F.interpolate(bmask, size=(hh, ww), mode='bilinear') * (1 - alpha1) + seman_bbox * alpha1
+        x = torch.cat((x, enc_5), dim=1)
+        x, stage_mask = self.res2(x, w, stage_bbox)
+
+        # 32x32
+        hh, ww = x.size(2), x.size(3)
+        seman_bbox = batched_index_select(stage_mask, dim=1, index=y.view(b, obj, 1, 1))  # size (b, num_o, h, w)
+        seman_bbox = torch.sigmoid(seman_bbox) * F.interpolate(bbox_mask_, size=(hh, ww), mode='nearest')
+        alpha2 = torch.gather(self.sigmoid(self.alpha2).expand(b, -1, -1), dim=1, index=y.view(b, obj, 1)).unsqueeze(-1)
+        stage_bbox = F.interpolate(bmask, size=(hh, ww), mode='bilinear') * (1 - alpha2) + seman_bbox * alpha2
+        x = torch.cat((x, enc_4), dim=1)
+        x, stage_mask = self.res3(x, w, stage_bbox)
+
+        # 64x64
+        hh, ww = x.size(2), x.size(3)
+        seman_bbox = batched_index_select(stage_mask, dim=1, index=y.view(b, obj, 1, 1))  # size (b, num_o, h, w)
+        seman_bbox = torch.sigmoid(seman_bbox) * F.interpolate(bbox_mask_, size=(hh, ww), mode='nearest')
+        alpha3 = torch.gather(self.sigmoid(self.alpha3).expand(b, -1, -1), dim=1, index=y.view(b, obj, 1)).unsqueeze(-1)
+        stage_bbox = F.interpolate(bmask, size=(hh, ww), mode='bilinear') * (1 - alpha3) + seman_bbox * alpha3
+        x = torch.cat((x, enc_3), dim=1)
+        x, stage_mask = self.res4(x, w, stage_bbox)
+
+        # 128x128
+        hh, ww = x.size(2), x.size(3)
+        seman_bbox = batched_index_select(stage_mask, dim=1, index=y.view(b, obj, 1, 1))  # size (b, num_o, h, w)
+        seman_bbox = torch.sigmoid(seman_bbox) * F.interpolate(bbox_mask_, size=(hh, ww), mode='nearest')
+        alpha4 = torch.gather(self.sigmoid(self.alpha4).expand(b, -1, -1), dim=1, index=y.view(b, obj, 1)).unsqueeze(-1)
+        stage_bbox = F.interpolate(bmask, size=(hh, ww), mode='bilinear') * (1 - alpha4) + seman_bbox * alpha4
+        x = torch.cat((x, enc_2), dim=1)
+        x, stage_mask = self.res5(x, w, stage_bbox)
+
+        # 256x256
+        hh, ww = x.size(2), x.size(3)
+        seman_bbox = batched_index_select(stage_mask, dim=1, index=y.view(b, obj, 1, 1))  # size (b, num_o, h, w)
+        seman_bbox = torch.sigmoid(seman_bbox) * F.interpolate(bbox_mask_, size=(hh, ww), mode='nearest')
+        alpha5 = torch.gather(self.sigmoid(self.alpha5).expand(b, -1, -1), dim=1, index=y.view(b, obj, 1)).unsqueeze(-1)
+        stage_bbox = F.interpolate(bmask, size=(hh, ww), mode='bilinear') * (1 - alpha5) + seman_bbox * alpha5
+        x = torch.cat((x, enc_1), dim=1)
+        x, _ = self.res6(x, w, stage_bbox)
+
+        # to RGB
+        x = F.interpolate(self.final(x), (hw[0], hw[0]))
+        return {'image_contents': x, 'stage_bbox': stage_bbox}
+
+    def init_parameter(self):
+        for k in self.named_parameters():
+            if k[1].dim() > 1:
+                torch.nn.init.orthogonal_(k[1])
+            if k[0][-4:] == 'bias':
+                torch.nn.init.constant_(k[1], 0)
+
+
+class TripleGenerator_v0812(nn.Module):
+    def __init__(self, ch=16, z_dim=128, num_classes=10, pred_classes=7, output_dim=3, emb_dim=180, num_t=8):
+        super(TripleGenerator_v0812, self).__init__()
+        self.num_classes = num_classes
+        self.pred_classes = pred_classes
+
+        self.label_embedding = nn.Embedding(num_classes, emb_dim)
+        self.pred_embedding = nn.Embedding(pred_classes, emb_dim)
+
+        num_w = 512
+        self.proj = nn.utils.spectral_norm(nn.Linear(z_dim + emb_dim*(2*num_t+1)+ch*32*2*2, num_w))
+        self.fc = nn.utils.spectral_norm(nn.Linear(z_dim, 4 * 4 * 32 * ch))
+
+        self.enc1 = GatedConv(4, ch*1, stride=2)  # 8x128x128
+        self.enc2 = GatedConv(ch * 1, ch * 2, stride=2)  # 16x64x64
+        self.enc3 = GatedConv(ch * 2, ch * 4, stride=2)  # 32x32x32
+        self.enc4 = GatedConv(ch * 4, ch * 8, stride=2)  # 64x16x16
+        self.enc5 = GatedConv(ch * 8, ch * 16, stride=2)  # 128x8x8
+        self.enc6 = GatedConv(ch * 16, ch * 32, stride=2)  # 256x4x4
+        self.enc7 = GatedConv(ch * 32, ch * 32, stride=2)  # 512x2x2
+
+        self.res1 = ResBlock(ch * 32, ch * 16, upsample=True, num_w=num_w)  # ch * (32+16)  enc6
+        self.res2 = ResBlock(ch * 16, ch * 8, upsample=True, num_w=num_w)  # ch * (16+8)  enc5
+        self.res3 = ResBlock(ch * 8, ch * 4, upsample=True, num_w=num_w)  # ch * (8+4)  enc4
+        self.res4 = ResBlock(ch * 4, ch * 2, upsample=True, num_w=num_w)  # ch * (4+2)  enc3
+        self.res5 = ResBlock(ch * 2, ch * 1, upsample=True, num_w=num_w)  # ch * (2+1)  enc2
+        self.res6 = ResBlock(ch * 1, ch * 1, upsample=True, num_w=num_w, predict_mask=False)  # ch * (2+1)    enc1
+
+        self.final = nn.Sequential(BatchNorm(ch),
+                                   nn.ReLU(),
+                                   conv2d(ch, output_dim, 3, 1, 1),
+                                   nn.Tanh())
+
+        self.alpha1 = nn.Parameter(torch.zeros(1, num_classes, 1))
+        self.alpha2 = nn.Parameter(torch.zeros(1, num_classes, 1))
+        self.alpha3 = nn.Parameter(torch.zeros(1, num_classes, 1))
+        self.alpha4 = nn.Parameter(torch.zeros(1, num_classes, 1))
+        self.alpha5 = nn.Parameter(torch.zeros(1, num_classes, 1))
+
+        self.sigmoid = nn.Sigmoid()
+
+        self.mask_regress = MaskRegressNetv2(num_w)
+        bbox_network = list()
+        bbox_network.append(nn.Linear(512+4, 128))
+        bbox_network.append(nn.ReLU())
+        bbox_network.append(nn.Linear(128, 64))
+        bbox_network.append(nn.ReLU())
+        bbox_network.append(nn.Linear(64, 4))
+        self.bbox_network = nn.Sequential(*bbox_network)
+        self.init_parameter()
+    
+    def forward(self, z, bbox=None, z_im=None, y=None, triples=None, masked_images=None):
+        # ===================================Encoder===================================
+        image, mask = torch.split(masked_images, [3, 1], dim=1)
+        enc_1 = m = self.enc1(masked_images)
+        enc_2 = m = self.enc2(m)
+        enc_3 = m = self.enc3(m)
+        enc_4 = m = self.enc4(m)
+        enc_5 = m = self.enc5(m)
+        enc_6 = m = self.enc6(m)
+        m = self.enc7(m)
+
+        # ===================================Embedding===================================
+        b, obj = y.size(0), y.size(1)
+        if z is None:
+            z = torch.randn(b, obj, triples.size(1))
+        z = z.view(b * obj, -1)
+        s, p, o = triples.chunk(3, dim=-1)  # [B,# of triples, 1]
+        s, p, o = [x.squeeze(-1) for x in [s, p, o]]  # [B, # of triples]
+        s_emb = torch.gather(y, -1, s)
+        sel_p = p.unsqueeze(1).expand(-1, obj, -1) * torch.eq(s_emb.unsqueeze(1).expand(-1, obj, -1), y.unsqueeze(-1).expand(-1, -1, s.size(-1))).long()  # [B, num_o, num_t]
+        sel_o = o.unsqueeze(1).expand(-1, obj, -1) * torch.eq(s_emb.unsqueeze(1).expand(-1, obj, -1), y.unsqueeze(-1).expand(-1, -1, s.size(-1))).long()  # [B, num_o, num_t]
+        obj_triple = torch.cat((y.unsqueeze(-1), sel_o), -1)  # [B, num_o, # of triples + 1]
+        label_embedding = self.label_embedding(obj_triple)  # [B, num_o, # of triples + 1, 180]
+        pred_embedding = self.pred_embedding(sel_p)  # [B, num_o, # of triples, 180]      
+        obj_triple_embedding = torch.cat((label_embedding, pred_embedding), 2).view(b, obj, -1)  # [B, num_o, (2 * (# of triples) + 1) * 180]
+        obj_triple_embedding = torch.cat((obj_triple_embedding, m.view(b, -1).unsqueeze(1).expand(-1, obj, -1)), -1).view(b * obj, -1)  # [B, num_o, (2 * (# of triples) + 1) * 180 + feat]
+        w = torch.cat((z, obj_triple_embedding), dim=-1)  # 
+        w = self.proj(w)
+
+        # ===================================Mask_Regressor===================================
+        bbox = self.bbox_network(torch.cat((w, bbox.view(b * obj, -1)), -1)).view(b, obj, -1)
+        eps = 0.004
+        bbox_x0y0 = torch.clamp(bbox[:,:,0:2], eps, 1.-eps)
+        bbox_wh = torch.clamp(bbox[:,:,2:]-bbox_x0y0, eps, 1.-eps)
+        bbox = torch.cat((bbox_x0y0, bbox_wh), -1)
+        bmask = self.mask_regress(w, bbox)
+        bbox_mask_ = bbox_mask(z, bbox, 64, 64)
+
+        # ===================================Decoder===================================
+        # print(m.shape, self.fc)
+        hh, ww = enc_6.size(2), enc_6.size(3)
+        x = F.interpolate(m, size=(hh, ww), mode='bilinear')
+        # 8x8
+        # x = torch.cat((x, enc_6), dim=1)
+        temp_mask = F.interpolate(mask, size=(hh, ww), mode='bilinear')
+        x = x * temp_mask + enc_6 * (1.-temp_mask)
+        x, stage_mask = self.res1(x, w, bmask)
+
+        # 16x16
+        hh, ww = x.size(2), x.size(3)
+        seman_bbox = batched_index_select(stage_mask, dim=1, index=y.view(b, obj, 1, 1))  # size (b, num_o, h, w)
+        seman_bbox = torch.sigmoid(seman_bbox) * F.interpolate(bbox_mask_, size=(hh, ww), mode='nearest')
+        alpha1 = torch.gather(self.sigmoid(self.alpha1).expand(b, -1, -1), dim=1, index=y.view(b, obj, 1)).unsqueeze(-1)
+        stage_bbox = F.interpolate(bmask, size=(hh, ww), mode='bilinear') * (1 - alpha1) + seman_bbox * alpha1
+        # x = torch.cat((x, enc_5), dim=1)
+        temp_mask = F.interpolate(mask, size=(hh, ww), mode='bilinear')
+        x = x * temp_mask + enc_5 * (1.-temp_mask)
+        x, stage_mask = self.res2(x, w, stage_bbox)
+
+        # 32x32
+        hh, ww = x.size(2), x.size(3)
+        seman_bbox = batched_index_select(stage_mask, dim=1, index=y.view(b, obj, 1, 1))  # size (b, num_o, h, w)
+        seman_bbox = torch.sigmoid(seman_bbox) * F.interpolate(bbox_mask_, size=(hh, ww), mode='nearest')
+        alpha2 = torch.gather(self.sigmoid(self.alpha2).expand(b, -1, -1), dim=1, index=y.view(b, obj, 1)).unsqueeze(-1)
+        stage_bbox = F.interpolate(bmask, size=(hh, ww), mode='bilinear') * (1 - alpha2) + seman_bbox * alpha2
+        # x = torch.cat((x, enc_4), dim=1)
+        temp_mask = F.interpolate(mask, size=(hh, ww), mode='bilinear')
+        x = x * temp_mask + enc_4 * (1.-temp_mask)
+        x, stage_mask = self.res3(x, w, stage_bbox)
+
+        # 64x64
+        hh, ww = x.size(2), x.size(3)
+        seman_bbox = batched_index_select(stage_mask, dim=1, index=y.view(b, obj, 1, 1))  # size (b, num_o, h, w)
+        seman_bbox = torch.sigmoid(seman_bbox) * F.interpolate(bbox_mask_, size=(hh, ww), mode='nearest')
+        alpha3 = torch.gather(self.sigmoid(self.alpha3).expand(b, -1, -1), dim=1, index=y.view(b, obj, 1)).unsqueeze(-1)
+        stage_bbox = F.interpolate(bmask, size=(hh, ww), mode='bilinear') * (1 - alpha3) + seman_bbox * alpha3
+        # x = torch.cat((x, enc_3), dim=1)
+        temp_mask = F.interpolate(mask, size=(hh, ww), mode='bilinear')
+        x = x * temp_mask + enc_3 * (1.-temp_mask)
+        x, stage_mask = self.res4(x, w, stage_bbox)
+
+        # 128x128
+        hh, ww = x.size(2), x.size(3)
+        seman_bbox = batched_index_select(stage_mask, dim=1, index=y.view(b, obj, 1, 1))  # size (b, num_o, h, w)
+        seman_bbox = torch.sigmoid(seman_bbox) * F.interpolate(bbox_mask_, size=(hh, ww), mode='nearest')
+        alpha4 = torch.gather(self.sigmoid(self.alpha4).expand(b, -1, -1), dim=1, index=y.view(b, obj, 1)).unsqueeze(-1)
+        stage_bbox = F.interpolate(bmask, size=(hh, ww), mode='bilinear') * (1 - alpha4) + seman_bbox * alpha4
+        # x = torch.cat((x, enc_2), dim=1)
+        temp_mask = F.interpolate(mask, size=(hh, ww), mode='bilinear')
+        x = x * temp_mask + enc_2 * (1.-temp_mask)
+        x, stage_mask = self.res5(x, w, stage_bbox)
+
+        # 256x256
+        hh, ww = x.size(2), x.size(3)
+        seman_bbox = batched_index_select(stage_mask, dim=1, index=y.view(b, obj, 1, 1))  # size (b, num_o, h, w)
+        seman_bbox = torch.sigmoid(seman_bbox) * F.interpolate(bbox_mask_, size=(hh, ww), mode='nearest')
+        alpha5 = torch.gather(self.sigmoid(self.alpha5).expand(b, -1, -1), dim=1, index=y.view(b, obj, 1)).unsqueeze(-1)
+        stage_bbox = F.interpolate(bmask, size=(hh, ww), mode='bilinear') * (1 - alpha5) + seman_bbox * alpha5
+        # x = torch.cat((x, enc_1), dim=1)
+        temp_mask = F.interpolate(mask, size=(hh, ww), mode='bilinear')
+        x = x * temp_mask + enc_1 * (1.-temp_mask)
+        x, _ = self.res6(x, w, stage_bbox)
+
+        # to RGB
+        x = self.final(x)
+        return x, stage_bbox, bbox
 
     def init_parameter(self):
         for k in self.named_parameters():
