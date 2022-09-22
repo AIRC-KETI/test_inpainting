@@ -153,3 +153,49 @@ class MaskRegressNetv3(nn.Module):
         o_bbmap = masks_to_layout(o_bbox, o, self.map_size).view(b, num_o, self.map_size, self.map_size)
 
         return s_bbmap, o_bbmap
+
+class MaskRegressNet16(nn.Module):
+    def __init__(self, obj_feat=128, mask_size=16, map_size=64):
+        super(MaskRegressNet16, self).__init__()
+        self.mask_size = mask_size
+        self.map_size = map_size
+
+        self.fc = nn.utils.spectral_norm(nn.Linear(obj_feat, 256 * 4 * 4))
+        conv1 = list()
+        conv1.append(nn.utils.spectral_norm(nn.Conv2d(256, 256, 3, 1, 1)))
+        conv1.append(nn.InstanceNorm2d(256))
+        conv1.append(nn.ReLU())
+        self.conv1 = nn.Sequential(*conv1)
+
+        conv2 = list()
+        conv2.append(nn.utils.spectral_norm(nn.Conv2d(256, 256, 3, 1, 1)))
+        conv2.append(nn.InstanceNorm2d(256))
+        conv2.append(nn.ReLU())
+        self.conv2 = nn.Sequential(*conv2)
+
+        conv3 = list()
+        conv3.append(nn.utils.spectral_norm(nn.Conv2d(256, 256, 3, 1, 1)))
+        conv3.append(nn.InstanceNorm2d(256))
+        conv3.append(nn.ReLU())
+        conv3.append(nn.utils.spectral_norm(nn.Conv2d(256, 1, 1, 1)))
+        conv3.append(nn.Sigmoid())
+        self.conv3 = nn.Sequential(*conv3)
+
+    def forward(self, obj_feat, bbox):
+        """
+        :param obj_feat: (b*num_o, feat_dim)
+        :param bbox: (b, num_o, 4)
+        :return: bbmap: (b, num_o, map_size, map_size)
+        """
+        b, num_o, _ = bbox.size()
+        obj_feat = obj_feat.view(b * num_o, -1)
+        x = self.fc(obj_feat)
+        x = self.conv1(x.view(b * num_o, 256, 4, 4))
+        x = F.interpolate(x, size=8, mode='bilinear')
+        x = self.conv2(x)
+        x = F.interpolate(x, size=16, mode='bilinear')
+        x = self.conv3(x)
+        x = x.view(b, num_o, self.mask_size, self.mask_size)
+
+        bbmap = masks_to_layout(bbox, x, self.map_size).view(b, num_o, self.map_size, self.map_size)
+        return bbmap, x

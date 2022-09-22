@@ -233,7 +233,7 @@ class Inceptionv3OnlyFeature(torch.nn.Module):
         # N x 1280 x 8 x 8
         x = self.net.Mixed_7b(x)
         # N x 2048 x 8 x 8
-        x = self.net.Mixed_7c(x)
+        x = spatial_feat = self.net.Mixed_7c(x)
         # N x 2048 x 8 x 8
         # Adaptive average pooling
         x = feat = self.net.avgpool(x)
@@ -245,6 +245,67 @@ class Inceptionv3OnlyFeature(torch.nn.Module):
         x = self.net.fc(x)
         # N x 1000 (num_classes)
         return feat, x
+
+class Inceptionv3SpatialFeature(torch.nn.Module):
+    def __init__(self, requires_grad=False):
+        super(Inceptionv3SpatialFeature, self).__init__()
+        # Get a resnet50 backbone
+        self.net = models.inception.inception_v3(pretrained=True)
+        self.net.eval()
+        if not requires_grad:
+            for param in self.parameters():
+                param.requires_grad = False
+
+    def forward(self, x):
+        # x = 2.*x - 1.
+        # print(torch.min(x), torch.max(x))
+        # N x 3 x 299 x 299
+        x = self.net.Conv2d_1a_3x3(x)
+        # N x 32 x 149 x 149
+        x = self.net.Conv2d_2a_3x3(x)
+        # N x 32 x 147 x 147
+        x = self.net.Conv2d_2b_3x3(x)
+        # N x 64 x 147 x 147
+        x = self.net.maxpool1(x)
+        # N x 64 x 73 x 73
+        x = self.net.Conv2d_3b_1x1(x)
+        # N x 80 x 73 x 73
+        x = self.net.Conv2d_4a_3x3(x)
+        # N x 192 x 71 x 71
+        x = self.net.maxpool2(x)
+        # N x 192 x 35 x 35
+        x = self.net.Mixed_5b(x)
+        # N x 256 x 35 x 35
+        x = self.net.Mixed_5c(x)
+        # N x 288 x 35 x 35
+        x = self.net.Mixed_5d(x)
+        # N x 288 x 35 x 35
+        x = self.net.Mixed_6a(x)
+        # N x 768 x 17 x 17
+        x = self.net.Mixed_6b(x)
+        # N x 768 x 17 x 17
+        x = self.net.Mixed_6c(x)
+        # N x 768 x 17 x 17
+        x = self.net.Mixed_6d(x)
+        # N x 768 x 17 x 17
+        x = spatial_feat = self.net.Mixed_6e(x)
+        # N x 768 x 17 x 17
+        x = self.net.Mixed_7a(x)
+        # N x 1280 x 8 x 8
+        x = self.net.Mixed_7b(x)
+        # N x 2048 x 8 x 8
+        x = self.net.Mixed_7c(x)
+        # N x 2048 x 8 x 8
+        # Adaptive average pooling
+        x = feat = self.net.avgpool(x)
+        # N x 2048 x 1 x 1
+        x = self.net.dropout(x)
+        # N x 2048 x 1 x 1
+        x = torch.flatten(x, 1)
+        # N x 2048
+        x = self.net.fc(x)
+        # N x 1000 (num_classes)
+        return spatial_feat, feat, x
 
 def correlation_loss(y_pred, y_true):
     x = y_pred.clone()

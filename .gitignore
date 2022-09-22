@@ -2,3 +2,5 @@ datasets/*
 triple_gen/*
 september/*
 pretrained/*
+*.pth
+*.pt

@@ -213,7 +213,7 @@ def main(args):
             d_loss_real = torch.nn.ReLU()(1.0 - d_out_real).mean()
 
             z = torch.randn(real_images.size(0), num_obj, z_dim).to(device)
-            content = {'image_contents': masked_images, 'mask': mask, 'label': label[:,randomly_selected.item()].squeeze(dim=-1), 'bbox': selected_bbox, 'triples': triples, 'z': z}
+            content = {'image_contents': masked_images, 'mask': mask, 'label': label[:,randomly_selected.item()].squeeze(dim=-1), 'bbox': selected_bbox, 'triples': triples, 'z': z, 'batch_randomly_selected': randomly_selected.expand(b, -1)}
             fake_images_dict = netG(content)
             # fake_images = fake_images_dict['image_contents'] * mask + (1.-mask) * masked_images
             fake_images = fake_images_dict['image_contents']
@@ -248,7 +248,7 @@ def main(args):
                 pixel_loss = l1_loss(fake_images, real_images).mean()
                 o_pixel_loss = l1_loss(obj_images, fake_obj_images).mean()
 
-                g_loss = 0.01 * g_loss_fake + pixel_loss + 0.01 * g_loss_o_fake + o_pixel_loss
+                g_loss = g_loss_fake + 0.1 * pixel_loss + 5. * g_loss_o_fake + 0.1 * o_pixel_loss
                 g_loss.backward()
                 g_optimizer.step()
 

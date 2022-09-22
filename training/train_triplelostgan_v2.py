@@ -274,7 +274,7 @@ def main(args):
                 d_loss_fobj_app = torch.nn.ReLU()(1.0 + d_out_fobj_app).mean()
                 d_loss_fpred = torch.nn.ReLU()(1.0 + d_out_fpred).mean()
                 d_loss = lamb_obj * (d_loss_robj + d_loss_fobj) + lamb_img * (d_loss_real + d_loss_fake) + lamb_app * (d_loss_robj_app + d_loss_fobj_app) + lamb_pred * (d_loss_rpred + d_loss_fpred)
-            
+
             scaler.scale(d_loss).backward()
             scaler.step(d_optimizer)
             scaler.update()

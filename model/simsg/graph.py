@@ -44,14 +44,21 @@ class GraphTripleConv(nn.Module):
     assert pooling in ['sum', 'avg'], 'Invalid pooling "%s"' % pooling
 
     self.pooling = pooling
-    net1_layers = [2 * input_dim_obj + input_dim_pred, hidden_dim, 2 * hidden_dim + output_dim]
-    net1_layers = [l for l in net1_layers if l is not None]
-    self.net1 = build_mlp(net1_layers, batch_norm=mlp_normalization)
-    self.net1.apply(_init_weights)
-    
+    # net1_layers = [2 * input_dim_obj + input_dim_pred, hidden_dim, 2 * hidden_dim + output_dim]
+    # net1_layers = [l for l in net1_layers if l is not None]
+    # self.net1 = build_mlp(net1_layers, batch_norm=mlp_normalization)
+    # self.net1.apply(_init_weights)
+    net1 = list()
+    net1.append(nn.utils.spectral_norm(nn.Linear(2 * input_dim_obj + input_dim_pred, hidden_dim)))
+    net1.append(nn.utils.spectral_norm(nn.Linear(hidden_dim, 2 * hidden_dim + output_dim)))
+    self.net1 = nn.Sequential(*net1)
     net2_layers = [hidden_dim, hidden_dim, output_dim]
-    self.net2 = build_mlp(net2_layers, batch_norm=mlp_normalization)
-    self.net2.apply(_init_weights)
+    # self.net2 = build_mlp(net2_layers, batch_norm=mlp_normalization)
+    # self.net2.apply(_init_weights)
+    net2 = list()
+    net2.append(nn.utils.spectral_norm(nn.Linear(hidden_dim, hidden_dim)))
+    net2.append(nn.utils.spectral_norm(nn.Linear(hidden_dim, output_dim)))
+    self.net2 = nn.Sequential(*net2)
 
 
   def forward(self, obj_vecs, pred_vecs, edges):
@@ -72,7 +79,7 @@ class GraphTripleConv(nn.Module):
     
     # Break apart indices for subjects and objects; these have shape (num_triples,)
     s_idx = edges[:, 0].contiguous()
-    o_idx = edges[:, 1].contiguous()
+    o_idx = edges[:, -1].contiguous()
     
     # Get current vectors for subjects and objects; these have shape (num_triples, Din)
     cur_s_vecs = obj_vecs[s_idx]
@@ -80,7 +87,7 @@ class GraphTripleConv(nn.Module):
     
     # Get current vectors for triples; shape is (num_triples, 3 * Din)
     # Pass through net1 to get new triple vecs; shape is (num_triples, 2 * H + Dout)
-    print('[*] shape: {}, {}, {}'.format(cur_s_vecs.size(), pred_vecs.size(), cur_o_vecs.size()))
+    # print('[*] shape: {}, {}, {}'.format(cur_s_vecs.size(), pred_vecs.size(), cur_o_vecs.size()))
     cur_t_vecs = torch.cat([cur_s_vecs, pred_vecs, cur_o_vecs], dim=1)
     new_t_vecs = self.net1(cur_t_vecs)
 
@@ -176,14 +183,14 @@ class BatchGraphTripleConv(nn.Module):
     self.net2.apply(_init_weights)
 
 
-  def forward(self, obj_vecs, pred_vecs, edges):  # [obj_vecs] [32, 8, 308]
+  def forward(self, obj_vecs, pred_vecs, edges):  # [obj_vecs] [b, obj, 308]
     dtype, device = obj_vecs.dtype, obj_vecs.device
     num_batch, num_objs, num_triples = obj_vecs.size(0), obj_vecs.size(1), pred_vecs.size(1)
     Din_obj, Din_pred, H, Dout = self.input_dim_obj, self.input_dim_pred, self.hidden_dim, self.output_dim
     
     # Break apart indices for subjects and objects; these have shape (num_triples,)
-    s_idx = edges[:, :, 0].contiguous()  # [32, 8]
-    o_idx = edges[:, :, 1].contiguous()  # [32, 8]
+    s_idx = edges[:, :, 0].contiguous()  # [b, obj]
+    o_idx = edges[:, :, 2].contiguous()  # [b, obj]
     # Get current vectors for subjects and objects; these have shape (num_triples, Din)
     cur_s_vecs = obj_vecs[:,s_idx[1],:]
     cur_o_vecs = obj_vecs[:,s_idx[1],:]
