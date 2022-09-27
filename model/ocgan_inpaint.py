@@ -146,7 +146,7 @@ class SubDiscriminator1(nn.Module):
         x = self.conv5(x)
         x = self.activation(x)
         x = self.conv6(x)
-        return torch.nan_to_num(x)
+        return x  # torch.nan_to_num(x)
 
 class SubDiscriminator2(nn.Module):
     def __init__(self, num_classes=0, input_dim=3, ch=64):
@@ -172,7 +172,7 @@ class SubDiscriminator2(nn.Module):
         x = self.conv5(x)
         x = self.activation(x)
         x = self.conv6(x)
-        return torch.nan_to_num(x)
+        return x  # torch.nan_to_num(x)
 
 class SceneGraphEncoder(nn.Module):
     def __init__(self, emb_dim=128):
@@ -191,17 +191,17 @@ class SceneGraphEncoder(nn.Module):
         count = torch.arange(0, b*obj, obj, dtype=torch.long).unsqueeze(-1).unsqueeze(-1).cuda()
         triples = (triples+count).view(b*obj, -1)
         obj_vecs, pred_vecs = self.gcn1(obj_vecs, pred_vecs, triples)
-        obj_vecs, pred_vecs = torch.nan_to_num(obj_vecs), torch.nan_to_num(pred_vecs)
+        # obj_vecs, pred_vecs = torch.nan_to_num(obj_vecs), torch.nan_to_num(pred_vecs)
         obj_vecs, pred_vecs = self.gcn2(obj_vecs, pred_vecs, triples)
-        obj_vecs, pred_vecs = torch.nan_to_num(obj_vecs), torch.nan_to_num(pred_vecs)
+        # obj_vecs, pred_vecs = torch.nan_to_num(obj_vecs), torch.nan_to_num(pred_vecs)
         obj_vecs, pred_vecs = self.gcn3(obj_vecs, pred_vecs, triples)
-        obj_vecs, pred_vecs = torch.nan_to_num(obj_vecs), torch.nan_to_num(pred_vecs)
+        # obj_vecs, pred_vecs = torch.nan_to_num(obj_vecs), torch.nan_to_num(pred_vecs)
         obj_vecs, pred_vecs = self.gcn4(obj_vecs, pred_vecs, triples)
-        obj_vecs, pred_vecs = torch.nan_to_num(obj_vecs), torch.nan_to_num(pred_vecs)
+        # obj_vecs, pred_vecs = torch.nan_to_num(obj_vecs), torch.nan_to_num(pred_vecs)
         obj_vecs, pred_vecs = self.gcn5(obj_vecs, pred_vecs, triples)
-        obj_vecs, pred_vecs = torch.nan_to_num(obj_vecs), torch.nan_to_num(pred_vecs)
+        # obj_vecs, pred_vecs = torch.nan_to_num(obj_vecs), torch.nan_to_num(pred_vecs)
         obj_vecs, pred_vecs = self.gcn6(obj_vecs, pred_vecs, triples)
-        return torch.nan_to_num(obj_vecs).view(b,obj,-1)
+        return obj_vecs.view(b,obj,-1) # torch.nan_to_num(obj_vecs).view(b,obj,-1)
 
 class ObjectDiscriminator(nn.Module):
     def __init__(self, num_classes=0, input_dim=3, ch=64):

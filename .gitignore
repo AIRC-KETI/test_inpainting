@@ -4,3 +4,4 @@ september/*
 pretrained/*
 *.pth
 *.pt
+other_data/*
