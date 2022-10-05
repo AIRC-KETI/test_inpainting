@@ -12,9 +12,9 @@ from utils.util import *
 BatchNorm = SynchronizedBatchNorm2d
 
 
-class Generator(nn.Module):
+class OCGANGenerator(nn.Module):
     def __init__(self, ch=16, z_dim=128, num_classes=10, pred_classes=7, output_dim=3, emb_dim=128, num_t=31):
-        super(Generator, self).__init__()
+        super(OCGANGenerator, self).__init__()
         self.num_classes = num_classes
         self.pred_classes = pred_classes
         self.z_dim = z_dim

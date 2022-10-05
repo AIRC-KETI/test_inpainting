@@ -55,13 +55,13 @@ def make_secne_graph(label, triples, json_, vocab, epoch, idx):
 
 def get_dataset(dataset, img_size):
     if dataset == "coco":
-        data = CocoSceneGraphDataset(image_dir='../layout2img_ours/datasets/coco/train2017/',
-                                     instances_json='../layout2img_ours/datasets/coco/annotations/instances_train2017.json',
-                                     stuff_json='../layout2img_ours/datasets/coco/annotations/stuff_train2017.json',
+        data = CocoSceneGraphDataset(image_dir='./datasets/coco/train2017/',
+                                     instances_json='./datasets/coco/annotations/instances_train2017.json',
+                                     stuff_json='./datasets/coco/annotations/stuff_train2017.json',
                                      stuff_only=True, image_size=(img_size, img_size), left_right_flip=True)
     elif dataset == 'vg':
-        data = VgSceneGraphDataset(vocab_json='../layout2img_ours/data/tmp/vocab.json', h5_path='../layout2img_ours/data/tmp/preprocess_vg/train.h5',
-                                   image_dir='../layout2img_ours/datasets/vg/images/',
+        data = VgSceneGraphDataset(vocab_json='./data/tmp/vocab.json', h5_path='./data/tmp/preprocess_vg/train.h5',
+                                   image_dir='./datasets/vg/images/',
                                    image_size=(img_size, img_size), max_objects=30, left_right_flip=True)
     return data
 
@@ -149,7 +149,7 @@ def main(args):
 
     # Load model
     device = torch.device('cuda')
-    netG = Generator(num_classes=num_classes, output_dim=3, pred_classes=pred_classes).to(device)
+    netG = OCGANGenerator(num_classes=num_classes, output_dim=3, pred_classes=pred_classes).to(device)
     netD = Discriminator().to(device)
     # netOD = ObjectDiscriminator(num_classes=num_classes).to(device)
 
@@ -245,7 +245,7 @@ def main(args):
     start_time = time.time()
     l1_loss = nn.DataParallel(nn.L1Loss())
     ce_loss = nn.DataParallel(nn.CrossEntropyLoss())
-    perceptual_loss = nn.DataParallel(VGGLoss())
+    vgg_loss = nn.DataParallel(MyVGGLoss())
     inceptionv3 = nn.DataParallel(Inceptionv3SpatialFeature())
     cos = nn.CosineSimilarity(dim=-1, eps=1e-6)
 
@@ -315,11 +315,13 @@ def main(args):
 
                 pixel_loss = l1_loss(fake_images, real_images).mean()  # torch.nan_to_num(l1_loss(fake_images, real_images).mean())
                 # o_pixel_loss = l1_loss(obj_images, fake_obj_images).mean()
-                perc_loss = perceptual_loss(real_images, fake_images).mean()  # torch.nan_to_num(perceptual_loss(real_images, fake_images).mean())
+                perc_loss, gram_loss = vgg_loss(real_images, fake_images)  # torch.nan_to_num(perceptual_loss(real_images, fake_images).mean())
+                perc_loss, gram_loss = perc_loss.mean(), gram_loss.mean()
+                tv_loss = total_variation_loss(fake_images).mean()
                 # od_cls_fake = ce_loss(odloss_fake_cls, label[:,randomly_selected.item()]).mean()
                 sgsm = sgsm_loss(fake_images_dict['obj_embeddings'], fake_images_dict['spatial'], fake_images_dict['avg'], cos)
                 # print(fake_images_dict['obj_embeddings'][0])
-                g_loss = g_loss_fake + 1. * perc_loss + 1. * sgsm + 1. * pixel_loss  # + g_loss_o_fake + od_cls_fake
+                g_loss = g_loss_fake + 1. * perc_loss + 1. * sgsm + 1. * pixel_loss + 1. * gram_loss + 1. * tv_loss  # + g_loss_o_fake + od_cls_fake
                 g_loss.backward()
                 g_optimizer.step()
 

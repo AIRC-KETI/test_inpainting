@@ -12,9 +12,9 @@ from utils.util import *
 BatchNorm = SynchronizedBatchNorm2d
 
 
-class Generator(nn.Module):
+class OCGANGenerator(nn.Module):
     def __init__(self, ch=16, z_dim=128, num_classes=10, pred_classes=7, output_dim=3, emb_dim=128, num_t=31):
-        super(Generator, self).__init__()
+        super(OCGANGenerator, self).__init__()
         self.num_classes = num_classes
         self.pred_classes = pred_classes
         self.z_dim = z_dim
@@ -23,31 +23,30 @@ class Generator(nn.Module):
         
         self.spatial_projection = conv2d(768, 256, kernel_size=1, pad=0)
         self.avg_projection = nn.utils.spectral_norm(nn.Linear(2048, 256), eps=1e-4)
-        self.scene_graph_encoder = SceneGraphEncoder()
-        self.mask_regress = MaskRegressNet(obj_feat=256, map_size=128)
+        self.scene_graph_encoder = SceneGraphEncoder(emb_dim, 4, emb_dim, emb_dim*2)
+        self.mask_regress = MaskRegressNet(obj_feat=256+128, map_size=128)
 
-        self.enc1 = GatedConv(4, ch*1, stride=2)  # 8x128x128
-        self.enc2 = GatedConv(ch * 1, ch * 2, stride=2)  # 16x64x64
-        self.enc3 = GatedConv(ch * 2, ch * 4, stride=2)  # 32x32x32
-        self.enc4 = GatedConv(ch * 4, ch * 8, stride=2)  # 64x16x16
-        self.enc5 = GatedConv(ch * 8, ch * 16, stride=2)  # 128x8x8
-        self.enc6 = GatedConv(ch * 16, ch * 32, stride=2)  # 256x4x4
-        self.enc7 = GatedConv(ch * 32, ch * 64, stride=2)  # 1024x2x2
-        
         self.conv = conv2d(1024, 1024)
-        self.res1 = ResBlock(1024, 1024, num_w=159, upsample=True, predict_mask=False)  # 4->8
-        self.res2 = ResBlock(1024, 1024, num_w=159, upsample=True, predict_mask=False)  # 8->16
-        self.res3 = ResBlock(1024, 512, num_w=159, upsample=True, predict_mask=False)  # 16->32
-        self.res4 = ResBlock(512, 256, num_w=159, upsample=True, predict_mask=False)  # 32->64
-        self.res5 = ResBlock(256, 128, num_w=159, upsample=True, predict_mask=False)  # 64->128
-        self.res6 = ResBlock(128, 64, num_w=159, upsample=True, predict_mask=False)  # 128->256
+        self.res1 = ResBlock(1024+4, 1024, num_w=2*emb_dim+num_t, upsample=True, predict_mask=True, label=num_classes+num_t)  # 4->8
+        self.res2 = ResBlock(1024+4, 1024, num_w=2*emb_dim+num_t, upsample=True, predict_mask=True, label=num_classes+num_t)  # 8->16
+        self.res3 = ResBlock(1024+4, 512, num_w=2*emb_dim+num_t, upsample=True, predict_mask=True, label=num_classes+num_t)  # 16->32
+        self.res4 = ResBlock(512+4, 256, num_w=2*emb_dim+num_t, upsample=True, predict_mask=True, label=num_classes+num_t)  # 32->64
+        self.res5 = ResBlock(256+4, 128, num_w=2*emb_dim+num_t, upsample=True, predict_mask=True, label=num_classes+num_t)  # 64->128
+        self.res6 = ResBlock(128+4, 64, num_w=2*emb_dim+num_t, upsample=True, predict_mask=False, label=num_classes+num_t)  # 128->256
         self.final = nn.Sequential(BatchNorm(64),
                                    nn.ReLU(),
                                    conv2d(64, output_dim, 3, 1, 1),
                                    nn.Tanh())
 
+        self.sigmoid = nn.Sigmoid()
+        self.alpha1 = nn.Parameter(torch.zeros(1, num_classes, 1))
+        self.alpha2 = nn.Parameter(torch.zeros(1, num_classes, 1))
+        self.alpha3 = nn.Parameter(torch.zeros(1, num_classes, 1))
+        self.alpha4 = nn.Parameter(torch.zeros(1, num_classes, 1))
+        self.alpha5 = nn.Parameter(torch.zeros(1, num_classes, 1))
+
         self.init_parameter()
-    
+
     def forward(self, content):
         z = content['z']
         bbox = content['bbox']
@@ -57,81 +56,83 @@ class Generator(nn.Module):
         mask = content['mask']
         spatial, avg = content['spatial'], content['avg']
         b, obj = y.size(0), y.size(1)
-        # ===================================Encoder===================================
-        masked_images = torch.cat((masked_images, mask), 1)
-        enc_1 = m = self.enc1(masked_images)
-        enc_2 = m = self.enc2(m)
-        enc_3 = m = self.enc3(m)
-        enc_4 = m = self.enc4(m)
-        enc_5 = m = self.enc5(m)
-        enc_6 = m = self.enc6(m)
-        m = self.enc7(m)
         # ===================================SGSM===================================
         y_emb = self.obj_embedding(y)  # [b, o, 128]
+        y_emb = torch.cat((y_emb, bbox), -1)  # [b, o, 128+4]
         s, p, o = triples.chunk(3, dim=-1)  # [B,# of triples, 1]
         s, p, o = [x.squeeze(-1) for x in [s, p, o]]  # [B, # of triples]
         p = self.pred_embedding(p)  # [b, obj, emb_dim]
         obj_embeddings = self.scene_graph_encoder(y_emb, p, triples)  # [b, o, 256]
+        obj_embeddings, new_bbox = torch.split(obj_embeddings, [obj_embeddings.size(-1)-4, 4], -1)  # [b, o, 256], [b, o, 4]
         spatial = self.spatial_projection(spatial).view(b, 256, -1)  # [b, 256, 17*17]
         avg = self.avg_projection(avg.squeeze())  # [b, 256]
         # ===================================Conditioning===================================
         z_obj = torch.randn(b, obj, self.z_dim).cuda()
-        bmask = self.mask_regress(torch.cat((y_emb, z_obj), -1), bbox)  # [b, obj, h, w]
-        bbox_boundary_ = bbox_boundary(z, bbox, 128, 128)  # [b, obj, h, w]
-        bbox_mask_ = (bmask + bbox_boundary_)/2.
+        bbox = (bbox + new_bbox) * 0.5
+        bmask = self.mask_regress(torch.cat((obj_embeddings, z_obj), -1), bbox)  # [b, obj, h, w]
+        bbox_mask_ = bbox_boundary(z, bbox, 128, 128)  # [b, obj, h, w]
         one_hot = F.one_hot(torch.arange(0, y.size(1))).expand(b, obj, -1).cuda()
-        w = torch.cat((y_emb, one_hot), -1).view(b*obj, -1)  # [128 + 31]
+        w = torch.cat((obj_embeddings, one_hot), -1).view(b*obj, -1)
         # ===================================Generator===================================
-        # z = torch.randn([y.size(0), 1024, 4, 4]).cuda()
-        x = self.conv(m)
-        x = torch.cat((x, enc_6), 1)
+        z = torch.randn([y.size(0), 1024, 4, 4]).cuda()
+        masked_images = torch.cat((masked_images, mask), 1)
+        x = self.conv(z)
+
+        hh, ww = x.size(2), x.size(3)
+        temp_masked_images = F.interpolate(masked_images, (hh, ww))
+        x = torch.cat((x, temp_masked_images), 1)
         x, stage_mask = self.res1(x, w, bbox_mask_)
 
         hh, ww = x.size(2), x.size(3)
-        seman_bbox = batched_index_select(stage_mask, dim=1, index=y.view(b, obj, 1, 1))  # size (b, num_o, h, w)
-        seman_bbox = torch.sigmoid(seman_bbox) * F.interpolate(bbox_mask_, size=(hh, ww), mode='nearest')
+        seman_bbox = batched_index_select(stage_mask[:,:stage_mask.size(1)-y.size(1)], dim=1, index=y.view(b, obj, 1, 1))  # size (b, num_o, h, w)
+        seman_bbox = self.sigmoid(seman_bbox * stage_mask[:,stage_mask.size(1)-y.size(1):]) * F.interpolate(bbox_mask_, size=(hh, ww), mode='nearest')
         alpha1 = torch.gather(self.sigmoid(self.alpha1).expand(b, -1, -1), dim=1, index=y.view(b, obj, 1)).unsqueeze(-1)
         stage_bbox = F.interpolate(bmask, size=(hh, ww), mode='bilinear') * (1 - alpha1) + seman_bbox * alpha1
-        x = torch.cat((x, enc_5), dim=1)
+        temp_masked_images = F.interpolate(masked_images, (hh, ww))
+        x = torch.cat((x, temp_masked_images), 1)
         x, stage_mask = self.res2(x, w, stage_bbox)
 
         # 32x32
         hh, ww = x.size(2), x.size(3)
-        seman_bbox = batched_index_select(stage_mask, dim=1, index=y.view(b, obj, 1, 1))  # size (b, num_o, h, w)
-        seman_bbox = torch.sigmoid(seman_bbox) * F.interpolate(bbox_mask_, size=(hh, ww), mode='nearest')
+        seman_bbox = batched_index_select(stage_mask[:,:stage_mask.size(1)-y.size(1)], dim=1, index=y.view(b, obj, 1, 1))  # size (b, num_o, h, w)
+        seman_bbox = self.sigmoid(seman_bbox * stage_mask[:,stage_mask.size(1)-y.size(1):]) * F.interpolate(bbox_mask_, size=(hh, ww), mode='nearest')
         alpha2 = torch.gather(self.sigmoid(self.alpha2).expand(b, -1, -1), dim=1, index=y.view(b, obj, 1)).unsqueeze(-1)
         stage_bbox = F.interpolate(bmask, size=(hh, ww), mode='bilinear') * (1 - alpha2) + seman_bbox * alpha2
-        x = torch.cat((x, enc_4), dim=1)
+        temp_masked_images = F.interpolate(masked_images, (hh, ww))
+        x = torch.cat((x, temp_masked_images), 1)
         x, stage_mask = self.res3(x, w, stage_bbox)
 
         # 64x64
         hh, ww = x.size(2), x.size(3)
-        seman_bbox = batched_index_select(stage_mask, dim=1, index=y.view(b, obj, 1, 1))  # size (b, num_o, h, w)
-        seman_bbox = torch.sigmoid(seman_bbox) * F.interpolate(bbox_mask_, size=(hh, ww), mode='nearest')
+        seman_bbox = batched_index_select(stage_mask[:,:stage_mask.size(1)-y.size(1)], dim=1, index=y.view(b, obj, 1, 1))  # size (b, num_o, h, w)
+        seman_bbox = self.sigmoid(seman_bbox * stage_mask[:,stage_mask.size(1)-y.size(1):]) * F.interpolate(bbox_mask_, size=(hh, ww), mode='nearest')
         alpha3 = torch.gather(self.sigmoid(self.alpha3).expand(b, -1, -1), dim=1, index=y.view(b, obj, 1)).unsqueeze(-1)
         stage_bbox = F.interpolate(bmask, size=(hh, ww), mode='bilinear') * (1 - alpha3) + seman_bbox * alpha3
-        x = torch.cat((x, enc_3), dim=1)
+        temp_masked_images = F.interpolate(masked_images, (hh, ww))
+        x = torch.cat((x, temp_masked_images), 1)
         x, stage_mask = self.res4(x, w, stage_bbox)
 
         # 128x128
         hh, ww = x.size(2), x.size(3)
-        seman_bbox = batched_index_select(stage_mask, dim=1, index=y.view(b, obj, 1, 1))  # size (b, num_o, h, w)
-        seman_bbox = torch.sigmoid(seman_bbox) * F.interpolate(bbox_mask_, size=(hh, ww), mode='nearest')
+        seman_bbox = batched_index_select(stage_mask[:,:stage_mask.size(1)-y.size(1)], dim=1, index=y.view(b, obj, 1, 1))  # size (b, num_o, h, w)
+        seman_bbox = self.sigmoid(seman_bbox * stage_mask[:,stage_mask.size(1)-y.size(1):]) * F.interpolate(bbox_mask_, size=(hh, ww), mode='nearest')
         alpha4 = torch.gather(self.sigmoid(self.alpha4).expand(b, -1, -1), dim=1, index=y.view(b, obj, 1)).unsqueeze(-1)
         stage_bbox = F.interpolate(bmask, size=(hh, ww), mode='bilinear') * (1 - alpha4) + seman_bbox * alpha4
-        x = torch.cat((x, enc_2), dim=1)
+        temp_masked_images = F.interpolate(masked_images, (hh, ww))
+        x = torch.cat((x, temp_masked_images), 1)
         x, stage_mask = self.res5(x, w, stage_bbox)
 
         # 256x256
         hh, ww = x.size(2), x.size(3)
-        seman_bbox = batched_index_select(stage_mask, dim=1, index=y.view(b, obj, 1, 1))  # size (b, num_o, h, w)
-        seman_bbox = torch.sigmoid(seman_bbox) * F.interpolate(bbox_mask_, size=(hh, ww), mode='nearest')
+        seman_bbox = batched_index_select(stage_mask[:,:stage_mask.size(1)-y.size(1)], dim=1, index=y.view(b, obj, 1, 1))  # size (b, num_o, h, w)
+        seman_bbox = self.sigmoid(seman_bbox * stage_mask[:,stage_mask.size(1)-y.size(1):]) * F.interpolate(bbox_mask_, size=(hh, ww), mode='nearest')
         alpha5 = torch.gather(self.sigmoid(self.alpha5).expand(b, -1, -1), dim=1, index=y.view(b, obj, 1)).unsqueeze(-1)
         stage_bbox = F.interpolate(bmask, size=(hh, ww), mode='bilinear') * (1 - alpha5) + seman_bbox * alpha5
-        x = torch.cat((x, enc_1), dim=1)
+        temp_masked_images = F.interpolate(masked_images, (hh, ww))
+        x = torch.cat((x, temp_masked_images), 1)
         x, _ = self.res6(x, w, stage_bbox)
         x = self.final(x)
-        return {'image_contents': x, 'obj_embeddings': obj_embeddings, 'spatial': spatial, 'avg': avg}
+        return {'image_contents': x, 'obj_embeddings': obj_embeddings, 'spatial': spatial, 'avg': avg, 'bbox': new_bbox}
 
     def init_parameter(self):
         for k in self.named_parameters():
@@ -207,14 +208,14 @@ class SubDiscriminator2(nn.Module):
         return x
 
 class SceneGraphEncoder(nn.Module):
-    def __init__(self, emb_dim=128):
+    def __init__(self, emb_dim=128, bbox=4, pred_emb=128, out_emb=128):
         super(SceneGraphEncoder, self).__init__()
-        self.gcn1 = GraphTripleConv(128, 128, output_dim=256)
-        self.gcn2 = GraphTripleConv(256, 256, output_dim=256)
-        self.gcn3 = GraphTripleConv(256, 256, output_dim=256)
-        self.gcn4 = GraphTripleConv(256, 256, output_dim=256)
-        self.gcn5 = GraphTripleConv(256, 256, output_dim=256)
-        self.gcn6 = GraphTripleConv(256, 256, output_dim=256)
+        self.gcn1 = GraphTripleConv(emb_dim+bbox, pred_emb, output_dim=out_emb)
+        self.gcn2 = GraphTripleConv(out_emb, out_emb, output_dim=out_emb)
+        self.gcn3 = GraphTripleConv(out_emb, out_emb, output_dim=out_emb)
+        self.gcn4 = GraphTripleConv(out_emb, out_emb, output_dim=out_emb)
+        self.gcn5 = GraphTripleConv(out_emb, out_emb, output_dim=out_emb)
+        self.gcn6 = GraphTripleConv(out_emb, out_emb, output_dim=out_emb+bbox)
     
     def forward(self, obj_vecs, pred_vecs, triples):
         b, obj = obj_vecs.size(0), obj_vecs.size(1)
@@ -228,7 +229,7 @@ class SceneGraphEncoder(nn.Module):
         obj_vecs, pred_vecs = self.gcn4(obj_vecs, pred_vecs, triples)
         obj_vecs, pred_vecs = self.gcn5(obj_vecs, pred_vecs, triples)
         obj_vecs, pred_vecs = self.gcn6(obj_vecs, pred_vecs, triples)
-        return torch.nan_to_num(obj_vecs).view(b,obj,-1)
+        return obj_vecs.view(b,obj,-1)
 
 class ObjectDiscriminator(nn.Module):
     def __init__(self, num_classes=0, input_dim=3, ch=64):
@@ -257,10 +258,10 @@ class ObjectDiscriminator(nn.Module):
         cls = x
         x = self.linear(x)
         cls = self.cls(cls)
-        return torch.nan_to_num(x), torch.nan_to_num(cls)
+        return x, cls
 
 class ResBlock(nn.Module):
-    def __init__(self, in_ch, out_ch, h_ch=None, ksize=3, pad=1, upsample=False, stride=1, num_w=128, predict_mask=True, psp_module=False):
+    def __init__(self, in_ch, out_ch, h_ch=None, ksize=3, pad=1, upsample=False, stride=1, num_w=128, predict_mask=True, label=180, psp_module=False):
         super(ResBlock, self).__init__()
         self.upsample = upsample
         self.h_ch = h_ch if h_ch else out_ch
@@ -282,7 +283,7 @@ class ResBlock(nn.Module):
                 self.conv_mask = nn.Sequential(nn.Conv2d(out_ch, 100, 3, 1, 1),
                                                BatchNorm(100),
                                                nn.ReLU(),
-                                               nn.Conv2d(100, 184, 1, 1, 0, bias=True))
+                                               nn.Conv2d(100, label, 1, 1, 0, bias=True))
 
     def residual(self, in_feat, w, bbox):
         x = in_feat

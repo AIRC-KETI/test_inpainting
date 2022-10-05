@@ -5,3 +5,4 @@ pretrained/*
 *.pth
 *.pt
 other_data/*
+october/*
