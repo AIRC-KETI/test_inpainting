@@ -1,3 +1,4 @@
+from random import randint
 import torch
 import torch.nn.functional as F
 import torchvision
@@ -209,23 +210,28 @@ def compute_transformation_matrix(bbox):
     return transformation_matrix
 
 
-def bbox2_mask(bbox, image, is_train=True, max_ratio=0.5):
+def bbox2_mask(bbox, image, mode=0):
     # bbox = [B,4], [x0, y0, x1, y1]
     # print(bbox)
     img_H, img_W = image.size(2), image.size(3)
     # print(bbox.shape)
-    if is_train:
-        for i in range(image.size(0)):
-            if (bbox[i,:,2] * bbox[i,:,3]) >= max_ratio or (bbox[i, :, 0] < 0.):
-                rand_pos = 0.5 * torch.rand(1)
-                rand_width = torch.rand(1)
-                rand_height = 1./rand_width
-                rand_ratio = 0.4 * torch.rand(2)
-                w = torch.clamp(rand_width * (0.8 + rand_ratio[0]), min=0., max=1.)
-                h = torch.clamp(rand_height * (0.8 + rand_ratio[1]), min=0., max=1.)
-                bbox[i,:,:] = torch.tensor((0., 0., w, h)) + rand_pos
-
     x1, y1, x2, y2 = bbox[:,:,0], bbox[:,:,1], bbox[:,:,2]+bbox[:,:,0], bbox[:,:,3]+bbox[:,:,1]  # [B, 1]
+    # center_x, center_y = bbox[:,:,0] + 0.5 * bbox[:,:,2], bbox[:,:,1] + 0.5 * bbox[:,:,3]
+    random = torch.randint(4, (1,))
+    random = binary(random, 2).squeeze().float()  # [00, 01, 10, 11]
+    rand_x1  = (1.-random[0]) * (1.-random[1])
+    rand_y1 = (1.-random[0]) * random[1]
+    rand_x2 = random[0] * (1.-random[1])
+    rand_y2 = random[0] * random[1]
+    x1 = x1 + rand_x1 * ((100.-mode)/100.) * bbox[:,:,2]
+    y1 = y1 + rand_y1 * ((100.-mode)/100.) * bbox[:,:,3]
+    x2 = x2 - rand_x2 * ((100.-mode)/100.) * bbox[:,:,2]
+    y2 = y2 - rand_y2 * ((100.-mode)/100.) * bbox[:,:,3]
+    '''
+    elif is_train is True:
+        rand_int = torch.rand_like(bbox)
+        x1, y1, x2, y2 = rand_int[:,:,0] * center_x, rand_int[:,:,1] * center_y, center_x + (1.-center_x) * rand_int[:,:,2], center_y + (1.-center_y) * rand_int[:,:,3]
+    '''
     h_linspace = torch.unsqueeze(torch.linspace(0, img_H-1, steps=img_H), 0) #  [1, H]
     w_linspace = torch.unsqueeze(torch.linspace(0, img_W-1, steps=img_W), 0)  # [1, W]
     # print(w_linspace.shape, torch.tile(x1, (1, img_W)).shape)
@@ -239,7 +245,7 @@ def bbox2_mask(bbox, image, is_train=True, max_ratio=0.5):
     y_map = torch.tile(y_bool, (1, 1, img_W))  # [B, H, W]
     mask = torch.unsqueeze((x_map * y_map).to(torch.float32), 1)
     # print(mask.sum())
-    return mask
+    return mask, torch.stack((x1, y1, x2, y2), -1)
 
 
 def image2_bboxed_image(bbox, patch, whole):
@@ -257,3 +263,7 @@ def image2_bboxed_image(bbox, patch, whole):
     b_pad = img_H - patch.size(2) - t_pad
     padding = (l_pad, t_pad, r_pad, b_pad)
     return F.pad(patch, padding).float()
+
+def binary(x, bits):
+    mask = 2**torch.arange(bits).to(x.device, x.dtype)
+    return x.unsqueeze(-1).bitwise_and(mask).ne(0).byte()

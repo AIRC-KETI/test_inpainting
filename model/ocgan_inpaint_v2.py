@@ -12,9 +12,9 @@ from utils.util import *
 BatchNorm = SynchronizedBatchNorm2d
 
 
-class OCGANGenerator(nn.Module):
+class OCGANGenerator_256(nn.Module):
     def __init__(self, ch=16, z_dim=128, num_classes=10, pred_classes=7, output_dim=3, emb_dim=128, num_t=31):
-        super(OCGANGenerator, self).__init__()
+        super(OCGANGenerator_256, self).__init__()
         self.num_classes = num_classes
         self.pred_classes = pred_classes
         self.z_dim = z_dim
@@ -131,6 +131,125 @@ class OCGANGenerator(nn.Module):
         temp_masked_images = F.interpolate(masked_images, (hh, ww))
         x = torch.cat((x, temp_masked_images), 1)
         x, _ = self.res6(x, w, stage_bbox)
+        x = self.final(x)
+        return {'image_contents': x, 'obj_embeddings': obj_embeddings, 'spatial': spatial, 'avg': avg, 'bbox': new_bbox}
+
+    def init_parameter(self):
+        for k in self.named_parameters():
+            if k[1].dim() > 1:
+                torch.nn.init.orthogonal_(k[1])
+            if k[0][-4:] == 'bias':
+                torch.nn.init.constant_(k[1], 0)
+
+
+class OCGANGenerator_128(nn.Module):
+    def __init__(self, ch=16, z_dim=128, num_classes=10, pred_classes=7, output_dim=3, emb_dim=128, num_t=31):
+        super(OCGANGenerator_128, self).__init__()
+        self.num_classes = num_classes
+        self.pred_classes = pred_classes
+        self.z_dim = z_dim
+        self.obj_embedding = nn.Embedding(num_classes, emb_dim)
+        self.pred_embedding = nn.Embedding(pred_classes, emb_dim)
+        
+        self.spatial_projection = conv2d(768, 256, kernel_size=1, pad=0)
+        self.avg_projection = nn.utils.spectral_norm(nn.Linear(2048, 256), eps=1e-4)
+        self.scene_graph_encoder = SceneGraphEncoder(emb_dim, 4, emb_dim, emb_dim*2)
+        self.mask_regress = MaskRegressNet(obj_feat=256+128, map_size=128)
+
+        self.conv = conv2d(1024, 1024)
+        self.res1 = ResBlock(1024+4, 1024, num_w=2*emb_dim+num_t, upsample=True, predict_mask=True, label=num_classes+num_t)  # 4->8
+        self.res2 = ResBlock(1024+4, 1024, num_w=2*emb_dim+num_t, upsample=True, predict_mask=True, label=num_classes+num_t)  # 8->16
+        self.res3 = ResBlock(1024+4, 512, num_w=2*emb_dim+num_t, upsample=True, predict_mask=True, label=num_classes+num_t)  # 16->32
+        self.res4 = ResBlock(512+4, 256, num_w=2*emb_dim+num_t, upsample=True, predict_mask=True, label=num_classes+num_t)  # 32->64
+        self.res5 = ResBlock(256+4, 128, num_w=2*emb_dim+num_t, upsample=True, predict_mask=False, label=num_classes+num_t)  # 64->128
+        self.final = nn.Sequential(BatchNorm(128),
+                                   nn.ReLU(),
+                                   conv2d(128, output_dim, 3, 1, 1),
+                                   nn.Tanh())
+
+        self.sigmoid = nn.Sigmoid()
+        self.alpha1 = nn.Parameter(torch.zeros(1, num_classes, 1))
+        self.alpha2 = nn.Parameter(torch.zeros(1, num_classes, 1))
+        self.alpha3 = nn.Parameter(torch.zeros(1, num_classes, 1))
+        self.alpha4 = nn.Parameter(torch.zeros(1, num_classes, 1))
+
+        self.init_parameter()
+
+    def forward(self, content):
+        z = content['z']
+        bbox = content['bbox']
+        y = content['label']
+        triples = content['triples']
+        masked_images = content['image_contents']
+        mask = content['mask']
+        spatial, avg = content['spatial'], content['avg']
+        b, obj = y.size(0), y.size(1)
+        # ===================================SGSM===================================
+        y_emb = self.obj_embedding(y)  # [b, o, 128]
+        y_emb = torch.cat((y_emb, bbox), -1)  # [b, o, 128+4]
+        s, p, o = triples.chunk(3, dim=-1)  # [B,# of triples, 1]
+        s, p, o = [x.squeeze(-1) for x in [s, p, o]]  # [B, # of triples]
+        p = self.pred_embedding(p)  # [b, obj, emb_dim]
+        obj_embeddings = self.scene_graph_encoder(y_emb, p, triples)  # [b, o, 256]
+        obj_embeddings, new_bbox = torch.split(obj_embeddings, [obj_embeddings.size(-1)-4, 4], -1)  # [b, o, 256], [b, o, 4]
+        spatial = self.spatial_projection(spatial).view(b, 256, -1)  # [b, 256, 17*17]
+        avg = self.avg_projection(avg.squeeze())  # [b, 256]
+        # ===================================Conditioning===================================
+        z_obj = torch.randn(b, obj, self.z_dim).cuda()
+        bbox = (bbox + new_bbox) * 0.5
+        bmask = self.mask_regress(torch.cat((obj_embeddings, z_obj), -1), bbox)  # [b, obj, h, w]
+        bbox_mask_ = bbox_boundary(z, bbox, 128, 128)  # [b, obj, h, w]
+        one_hot = F.one_hot(torch.arange(0, y.size(1))).expand(b, obj, -1).cuda()
+        w = torch.cat((obj_embeddings, one_hot), -1).view(b*obj, -1)
+        # ===================================Generator===================================
+        z = torch.randn([y.size(0), 1024, 4, 4]).cuda()
+        masked_images = torch.cat((masked_images, mask), 1)
+        x = self.conv(z)
+
+        hh, ww = x.size(2), x.size(3)
+        temp_masked_images = F.interpolate(masked_images, (hh, ww))
+        x = torch.cat((x, temp_masked_images), 1)
+        x, stage_mask = self.res1(x, w, bbox_mask_)
+
+        hh, ww = x.size(2), x.size(3)
+        seman_bbox = batched_index_select(stage_mask[:,:stage_mask.size(1)-y.size(1)], dim=1, index=y.view(b, obj, 1, 1))  # size (b, num_o, h, w)
+        seman_bbox = self.sigmoid(seman_bbox * stage_mask[:,stage_mask.size(1)-y.size(1):]) * F.interpolate(bbox_mask_, size=(hh, ww), mode='nearest')
+        alpha1 = torch.gather(self.sigmoid(self.alpha1).expand(b, -1, -1), dim=1, index=y.view(b, obj, 1)).unsqueeze(-1)
+        stage_bbox = F.interpolate(bmask, size=(hh, ww), mode='bilinear') * (1 - alpha1) + seman_bbox * alpha1
+        temp_masked_images = F.interpolate(masked_images, (hh, ww))
+        x = torch.cat((x, temp_masked_images), 1)
+        x, stage_mask = self.res2(x, w, stage_bbox)
+
+        # 32x32
+        hh, ww = x.size(2), x.size(3)
+        seman_bbox = batched_index_select(stage_mask[:,:stage_mask.size(1)-y.size(1)], dim=1, index=y.view(b, obj, 1, 1))  # size (b, num_o, h, w)
+        seman_bbox = self.sigmoid(seman_bbox * stage_mask[:,stage_mask.size(1)-y.size(1):]) * F.interpolate(bbox_mask_, size=(hh, ww), mode='nearest')
+        alpha2 = torch.gather(self.sigmoid(self.alpha2).expand(b, -1, -1), dim=1, index=y.view(b, obj, 1)).unsqueeze(-1)
+        stage_bbox = F.interpolate(bmask, size=(hh, ww), mode='bilinear') * (1 - alpha2) + seman_bbox * alpha2
+        temp_masked_images = F.interpolate(masked_images, (hh, ww))
+        x = torch.cat((x, temp_masked_images), 1)
+        x, stage_mask = self.res3(x, w, stage_bbox)
+
+        # 64x64
+        hh, ww = x.size(2), x.size(3)
+        seman_bbox = batched_index_select(stage_mask[:,:stage_mask.size(1)-y.size(1)], dim=1, index=y.view(b, obj, 1, 1))  # size (b, num_o, h, w)
+        seman_bbox = self.sigmoid(seman_bbox * stage_mask[:,stage_mask.size(1)-y.size(1):]) * F.interpolate(bbox_mask_, size=(hh, ww), mode='nearest')
+        alpha3 = torch.gather(self.sigmoid(self.alpha3).expand(b, -1, -1), dim=1, index=y.view(b, obj, 1)).unsqueeze(-1)
+        stage_bbox = F.interpolate(bmask, size=(hh, ww), mode='bilinear') * (1 - alpha3) + seman_bbox * alpha3
+        temp_masked_images = F.interpolate(masked_images, (hh, ww))
+        x = torch.cat((x, temp_masked_images), 1)
+        x, stage_mask = self.res4(x, w, stage_bbox)
+
+        # 128x128
+        hh, ww = x.size(2), x.size(3)
+        seman_bbox = batched_index_select(stage_mask[:,:stage_mask.size(1)-y.size(1)], dim=1, index=y.view(b, obj, 1, 1))  # size (b, num_o, h, w)
+        seman_bbox = self.sigmoid(seman_bbox * stage_mask[:,stage_mask.size(1)-y.size(1):]) * F.interpolate(bbox_mask_, size=(hh, ww), mode='nearest')
+        alpha4 = torch.gather(self.sigmoid(self.alpha4).expand(b, -1, -1), dim=1, index=y.view(b, obj, 1)).unsqueeze(-1)
+        stage_bbox = F.interpolate(bmask, size=(hh, ww), mode='bilinear') * (1 - alpha4) + seman_bbox * alpha4
+        temp_masked_images = F.interpolate(masked_images, (hh, ww))
+        x = torch.cat((x, temp_masked_images), 1)
+        x, _ = self.res5(x, w, stage_bbox)
+
         x = self.final(x)
         return {'image_contents': x, 'obj_embeddings': obj_embeddings, 'spatial': spatial, 'avg': avg, 'bbox': new_bbox}
 

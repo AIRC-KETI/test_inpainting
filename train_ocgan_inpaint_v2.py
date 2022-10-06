@@ -19,7 +19,7 @@ from utils.save_image import *
 from data.cocostuff_loader_my import *
 from data.vg import *
 from model.ocgan_inpaint_v2 import *
-from model.discriminator_my import *
+from model.rcnn_discriminator_app import *
 import model.vis as vis
 from imageio import imwrite
 from model.sync_batchnorm import DataParallelWithCallback
@@ -157,8 +157,8 @@ def main(args):
 
     # Load model
     device = torch.device('cuda')
-    netG = OCGANGenerator(num_classes=num_classes, output_dim=3, pred_classes=pred_classes).to(device)
-    netD = CombineDiscriminator128_app(num_classes=num_classes, input_dim=4+num_obj, pred_classes=pred_classes).to(device)
+    netG = OCGANGenerator_128(num_classes=num_classes, output_dim=3, pred_classes=pred_classes).to(device)
+    netD = CombineDiscriminator128_app(num_classes=num_classes, input_dim=4).to(device)
 
     if len(glob.glob(args.model_path+'G_*')) == 0:
         netG.to(device)
@@ -246,7 +246,7 @@ def main(args):
     ones = torch.ones([1], dtype=torch.int)
     o_254 = 127 * ones
     o_255 = 128 * ones
-
+    inf_mode = False
     for epoch in range(args.start_epoch, args.total_epoch):
         netG.train()
         #netOD.train()
@@ -255,9 +255,10 @@ def main(args):
             for idx, data in enumerate(tqdm(dataloader)):
                 real_images, label, bbox, triples = data
                 real_images, label, bbox, triples = real_images.to(device), label.long().to(device), bbox.float(), triples.cuda()
-                randomly_selected = torch.randint(30, (1,))  # torch.randint(bbox.size(1), (1,))
+                randomly_selected = torch.randint(17, (1,))  # torch.randint(bbox.size(1), (1,))
                 selected_bbox = torch.unsqueeze(bbox[:,randomly_selected.item(), :], 1)
-                mask = bil.bbox2_mask(selected_bbox, real_images, is_train=True)  # 1 for mask, 0 for non-mask
+                rand_mode = int(random.random() * 100)
+                mask, sel_xyxy = bil.bbox2_mask(selected_bbox, real_images, mode=rand_mode)
                 mask = mask.cuda()
                 masked_images = real_images * (1.-mask) # + 0.5 * mask
                 b, o, h, w = real_images.size(0), label.size(1), real_images.size(2), real_images.size(3)
@@ -265,36 +266,41 @@ def main(args):
                 x1, y1, x2, y2 = torch.min(torch.max(zeros, x1), o_254), torch.min(torch.max(zeros, y1), o_254), torch.min(torch.max(x1+1, x2), o_255), torch.min(torch.max(y1+1, y2), o_255)  # [B, o, 1]
                 sel_y1, sel_y2, sel_x1, sel_x2 = y1[:, randomly_selected.item()].unsqueeze(-1), y2[:, randomly_selected.item()].unsqueeze(-1), x1[:, randomly_selected.item()].unsqueeze(-1), x2[:, randomly_selected.item()].unsqueeze(-1)
 
-                # 
-                rand_mask = torch.randint(0, 2, (b, 1, 1, 1)).cuda()
-                f_mask = rand_mask * mask + (1.-rand_mask) * 1.
-                f_label = torch.randint(0, 2, (b, 1)).cuda() * label
-                f_triples = torch.randint(0, 2, (b, 1, 1)).cuda() * triples
-                rand_bbox = torch.randint(0, 2, (b, 1, 1))
-                f_bbox = rand_bbox * torch.Tensor([[[0.,0.,1.,1.,]]]) + (1.-rand_bbox) * bbox
-                f_whole_box = bbox_mask(real_images, f_bbox, args.img_size, args.img_size)
-                masked_images = real_images * (1.-f_mask)
-                f_con_masked_images = torch.cat((masked_images, f_mask), 1)
-                
+                if inf_mode:
+                    rand_mask = torch.randint(0, 2, (b, 1, 1, 1)).cuda()
+                    f_mask = rand_mask * mask + (1.-rand_mask) * 1.
+                    f_label = torch.randint(0, 2, (b, 1)).cuda() * label
+                    f_triples = torch.randint(0, 2, (b, 1, 1)).cuda() * triples
+                    rand_bbox = torch.randint(0, 2, (b, 1, 1))
+                    f_bbox = rand_bbox * torch.Tensor([[[0.,0.,1.,1.,]]]) + (1.-rand_bbox) * bbox
+                    # f_whole_box = bbox_mask(real_images, f_bbox, args.img_size, args.img_size)
+                    masked_images = real_images * (1.-f_mask)
+                    f_con_masked_images = torch.cat((masked_images, f_mask), 1)
+                else:
+                    f_mask = mask
+                    f_label = label
+                    f_triples = triples
+                    rand_bbox = torch.randint(0, 2, (b, 1, 1))
+                    f_bbox = rand_bbox * torch.Tensor([[[0.,0.,1.,1.,]]]) + (1.-rand_bbox) * bbox
+                    masked_images = real_images * (1.-f_mask)
+
                 # update D network
-                d_out_real, d_out_robj, d_out_robj_app, d_out_rpred = netD(torch.cat((real_images, f_mask, f_whole_box), 1), f_bbox, f_label, f_triples)
+                d_out_real, d_out_robj, d_out_robj_app = netD(torch.cat((real_images, f_mask), 1), f_bbox, f_label, f_triples)
                 d_loss_real = torch.nn.ReLU()(1.0 - d_out_real).mean()
                 d_loss_robj = torch.nn.ReLU()(1.0 - d_out_robj).mean()
                 d_loss_robj_app = torch.nn.ReLU()(1.0 - d_out_robj_app).mean()
-                d_loss_rpred = torch.nn.ReLU()(1.0 - d_out_rpred).mean()
 
                 z = torch.randn(real_images.size(0), label.size(1), z_dim).to(device)
                 spatial, avg, _ = inceptionv3(F.interpolate(real_images, (299, 299)))
-                content = {'image_contents': masked_images, 'mask': mask, 'label': label, 'bbox': bbox, 'triples': triples, 'z': z, 'batch_randomly_selected': randomly_selected.unsqueeze(0).expand(b, -1), 'spatial': spatial, 'avg': avg}
+                content = {'image_contents': masked_images, 'mask': f_mask, 'label': f_label, 'bbox': f_bbox, 'triples': f_triples, 'z': z, 'batch_randomly_selected': randomly_selected.unsqueeze(0).expand(b, -1), 'spatial': spatial, 'avg': avg}
                 fake_images_dict = netG(content)
                 fake_images = fake_images_dict['image_contents'] * mask + (1.-mask) * masked_images
                 comp_images = fake_images* f_mask + real_images * (1.-f_mask)
-                d_out_fake, d_out_fobj, d_out_fobj_app, d_out_fpred = netD(torch.cat((comp_images.detach(), f_mask, f_whole_box), 1), bbox, f_label, triples)
+                d_out_fake, d_out_fobj, d_out_fobj_app = netD(torch.cat((comp_images.detach(), f_mask), 1), bbox, f_label, triples)
                 d_loss_fake = torch.nn.ReLU()(1.0 + d_out_fake).mean()
                 d_loss_fobj = torch.nn.ReLU()(1.0 + d_out_fobj).mean()
                 d_loss_fobj_app = torch.nn.ReLU()(1.0 + d_out_fobj_app).mean()
-                d_loss_fpred = torch.nn.ReLU()(1.0 + d_out_fpred).mean()
-                d_loss = lamb_obj * (d_loss_robj + d_loss_fobj) + lamb_img * (d_loss_real + d_loss_fake) + lamb_app * (d_loss_robj_app + d_loss_fobj_app) + lamb_pred * (d_loss_rpred + d_loss_fpred)
+                d_loss = lamb_obj * (d_loss_robj + d_loss_fobj) + lamb_img * (d_loss_real + d_loss_fake) + lamb_app * (d_loss_robj_app + d_loss_fobj_app)
 
                 d_loss = d_loss_real + d_loss_fake
                 d_loss.backward()
@@ -302,27 +308,44 @@ def main(args):
 
                 # update G network
                 netG.zero_grad()
-                g_out_fake, g_out_obj, g_out_obj_app, g_out_pred = netD(torch.cat((comp_images, f_mask, f_whole_box), 1), f_bbox, f_label, f_triples)
+                g_out_fake, g_out_obj, g_out_obj_app = netD(torch.cat((comp_images, f_mask), 1), f_bbox, f_label, f_triples)
                 g_loss_fake = - g_out_fake.mean()
                 g_loss_obj = - g_out_obj.mean()
                 g_loss_obj_app = - g_out_obj_app.mean()
-                g_loss_pred = - g_out_pred.mean()
 
                 pixel_loss = l1_loss(comp_images, real_images).mean()
                 perc_loss, gram_loss = vgg_loss(comp_images, real_images)
                 perc_loss, gram_loss = perc_loss.mean(), gram_loss.mean()
                 tv_loss = total_variation_loss(comp_images).mean()
                 pixel_loss = l1_loss(fake_images, real_images).mean()
+                bbox_loss = l1_loss(fake_images_dict['bbox'], bbox).mean()
                 sgsm = sgsm_loss(fake_images_dict['obj_embeddings'], fake_images_dict['spatial'], fake_images_dict['avg'], cos)
-                g_loss = lamb_img * g_loss_fake + lamb_obj * g_loss_obj + lamb_app * g_loss_obj_app + lamb_pred * g_loss_pred + 1. * perc_loss + 1. * sgsm + 1. * pixel_loss + 1. * gram_loss + 1. * tv_loss
+                g_loss = lamb_img * g_loss_fake + lamb_obj * g_loss_obj + lamb_app * g_loss_obj_app + 0.1 * perc_loss + 1. * sgsm + 1. * pixel_loss + 120. * gram_loss + 0.1 * tv_loss + 1. * bbox_loss
                 g_loss.backward()
                 g_optimizer.step()
 
-                if idx % (int(total_idx/9)) == 1:
+                if idx % (int(total_idx/17)) == 1:
                 # if idx % 1 == 0:
                     elapsed = time.time() - start_time
                     elapsed = str(datetime.timedelta(seconds=elapsed))
                     logger.info("Epoch: [{}], Time Elapsed: [{}]".format(epoch, elapsed))
+                    logger.info('d_loss_real', "real: {}".format(d_loss_real.item()),
+                                                        "robj: {}".format(d_loss_robj.item()),
+                                                        "robj_app: {}".format(d_loss_robj_app.item()),
+                                                        "total loss: {}".format(d_loss.item()))
+                    logger.info('d_loss_fake', "fake: {}".format(d_loss_fake.item()),
+                                                        "fobj: {}".format(d_loss_fobj.item()),
+                                                        "fobj_app: {}".format(d_loss_fobj_app.item()))
+                    logger.info('g_loss', "fake: {}".format(g_loss_fake.item()),
+                                                        "gobj: {}".format(g_loss_obj.item()),
+                                                        "gobj_app: {}".format(g_loss_obj_app.item()),
+                                                        "style: {}".format(gram_loss.item()),
+                                                        "perc: {}".format(perc_loss.item()),
+                                                        "tv: {}".format(tv_loss.item()),
+                                                        "sgsm: {}".format(sgsm.item()),
+                                                        "bbox: {}".format(bbox_loss.item()),
+                                                        "total: {}".format(g_loss.item()),
+                                                        )
                     writer.add_image("real images", make_grid(real_images.cpu().data * 0.5 + 0.5, nrow=int(args.batch_size/4)), epoch * len(dataloader) + idx + 1)
                     writer.add_image("fake images", make_grid(fake_images.cpu().data * 0.5 + 0.5, nrow=int(args.batch_size/4)), epoch * len(dataloader) + idx + 1)
                     writer.add_image("masked images", make_grid(masked_images.cpu().data * 0.5 + 0.5, nrow=int(args.batch_size/4)), epoch * len(dataloader) + idx + 1)
@@ -331,21 +354,22 @@ def main(args):
                     writer.add_scalars("D_loss_real", {"real": d_loss_real.item(),
                                                         "robj": d_loss_robj.item(),
                                                         "robj_app": d_loss_robj_app.item(),
-                                                        "r_pred": d_loss_rpred.item(),
+                                                        # "r_pred": d_loss_rpred.item(),
                                                         "loss": d_loss.item()}, epoch*len(dataloader) + idx + 1)
                     writer.add_scalars("D_loss_fake", {"fake": d_loss_fake.item(),
                                                         "fobj": d_loss_fobj.item(),
                                                         "fobj_app": d_loss_fobj_app.item(),
-                                                        "f_pred": d_loss_rpred.item(),
+                                                        # "f_pred": d_loss_rpred.item(),
                                                         }, epoch*len(dataloader) + idx + 1)
                     writer.add_scalars("G_loss", {"fake": g_loss_fake.item(),
                                                     "obj": g_loss_obj.item(),
                                                     "obj_app": g_loss_obj_app.item(),
-                                                    "pred": g_loss_pred.item(),
+                                                    # "pred": g_loss_pred.item(),
                                                     "style": gram_loss.item(),
                                                     "perc": perc_loss.item(),
                                                     "tv": tv_loss.item(),
                                                     "sgsm": sgsm.item(),
+                                                    "bbox": bbox_loss.item(),
                                                     "loss": g_loss.item()}, epoch*len(dataloader) + idx + 1)
 
                     # writer.add_text('t/json', str(scene_graphs), epoch*len(dataloader) + idx + 1)
@@ -354,6 +378,7 @@ def main(args):
         if (epoch) % 2 == 0:
             torch.save(netG.state_dict(), os.path.join(args.out_path, 'model/', 'G_%d.pth' % (epoch + 1)))
             torch.save(netD.state_dict(), os.path.join(args.out_path, 'model/', 'D_%d.pth' % (epoch + 1)))
+            # torch.save(netOD.state_dict(), os.path.join(args.out_path, 'model/', 'OD_%d.pth' % (epoch + 1)))
 
 
 
