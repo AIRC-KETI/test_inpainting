@@ -196,7 +196,7 @@ class OCGANGenerator_128(nn.Module):
         avg = self.avg_projection(avg.squeeze())  # [b, 256]
         # ===================================Conditioning===================================
         z_obj = torch.randn(b, obj, self.z_dim).cuda()
-        bbox = (bbox + new_bbox) * 0.5
+        bbox = (bbox + new_bbox) * 0.9
         bmask = self.mask_regress(torch.cat((obj_embeddings, z_obj), -1), bbox)  # [b, obj, h, w]
         bbox_mask_ = bbox_boundary(z, bbox, 128, 128)  # [b, obj, h, w]
         one_hot = F.one_hot(torch.arange(0, y.size(1))).expand(b, obj, -1).cuda()

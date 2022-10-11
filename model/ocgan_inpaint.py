@@ -20,19 +20,19 @@ class OCGANGenerator(nn.Module):
         self.z_dim = z_dim
         self.obj_embedding = nn.Embedding(num_classes, emb_dim)
         self.pred_embedding = nn.Embedding(pred_classes, emb_dim)
-        
+
         self.spatial_projection = conv2d(768, 256, kernel_size=1, pad=0)
         self.avg_projection = nn.utils.spectral_norm(nn.Linear(2048, 256), eps=1e-4)
         self.scene_graph_encoder = SceneGraphEncoder()
         self.mask_regress = MaskRegressNet(obj_feat=256, map_size=128)
 
         self.conv = conv2d(1024, 1024)
-        self.res1 = ResBlock(1024+4, 1024, num_w=159, upsample=True, predict_mask=False)  # 4->8
-        self.res2 = ResBlock(1024+4, 1024, num_w=159, upsample=False, predict_mask=False)  # 8
-        self.res3 = ResBlock(1024+4, 512, num_w=159, upsample=True, predict_mask=False)  # 16
-        self.res4 = ResBlock(512+4, 256, num_w=159, upsample=True, predict_mask=False)  # 32
-        self.res5 = ResBlock(256+4, 128, num_w=159, upsample=True, predict_mask=False)  # 64
-        self.res6 = ResBlock(128+4, 64, num_w=159, upsample=True, predict_mask=False)  # 128
+        self.res1 = ResBlock(1024+4, 1024, num_w=z_dim+num_t, upsample=True, predict_mask=False)  # 4->8
+        self.res2 = ResBlock(1024+4, 1024, num_w=z_dim+num_t, upsample=False, predict_mask=False)  # 8
+        self.res3 = ResBlock(1024+4, 512, num_w=z_dim+num_t, upsample=True, predict_mask=False)  # 16
+        self.res4 = ResBlock(512+4, 256, num_w=z_dim+num_t, upsample=True, predict_mask=False)  # 32
+        self.res5 = ResBlock(256+4, 128, num_w=z_dim+num_t, upsample=True, predict_mask=False)  # 64
+        self.res6 = ResBlock(128+4, 64, num_w=z_dim+num_t, upsample=True, predict_mask=False)  # 128
         self.final = nn.Sequential(BatchNorm(64),
                                    nn.ReLU(),
                                    conv2d(64, output_dim, 3, 1, 1),
@@ -55,8 +55,9 @@ class OCGANGenerator(nn.Module):
         s, p, o = [x.squeeze(-1) for x in [s, p, o]]  # [B, # of triples]
         p = self.pred_embedding(p)  # [b, obj, emb_dim]
         obj_embeddings = self.scene_graph_encoder(y_emb, p, triples)  # [b, o, 256]
-        spatial = self.spatial_projection(spatial).view(b, 256, -1)  # [b, 256, 17*17]
-        avg = self.avg_projection(avg.squeeze())  # [b, 256]
+        if not (spatial is None or avg is None):
+            spatial = self.spatial_projection(spatial).view(b, 256, -1)  # [b, 256, 17*17]
+            avg = self.avg_projection(avg.squeeze())  # [b, 256]
         # ===================================Conditioning===================================
         z_obj = torch.randn(b, obj, self.z_dim).cuda()
         bmask = self.mask_regress(torch.cat((y_emb, z_obj), -1), bbox)  # [b, obj, h, w]
@@ -107,7 +108,6 @@ class OCGANGenerator(nn.Module):
                 torch.nn.init.orthogonal_(k[1])
             if k[0][-4:] == 'bias':
                 torch.nn.init.constant_(k[1], 0)
-
 
 class Discriminator(nn.Module):
     def __init__(self, num_classes=0, input_dim=3, ch=64):

@@ -1,5 +1,6 @@
 import argparse
 import os
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 import pickle
 import time
 import datetime
@@ -171,7 +172,7 @@ def main(args):
             for idx, data in enumerate(tqdm(dataloader)):
                 real_images, label, bbox, triples = data
                 real_images, label, bbox, triples = real_images.to(device), label.long().to(device).unsqueeze(-1), bbox.float(), triples.cuda()
-                for j in range(3):
+                for j in range(1):
                     selected_bbox = torch.unsqueeze(bbox[:,j,:], 1)
                     mask, sel_xyxy = bil.bbox2_mask(selected_bbox, real_images, mode=45)  # 1 for mask, 0 for non-mask
                     mask = mask.cuda()
@@ -193,6 +194,8 @@ def main(args):
                         else:
                             fake_images = torch.cat((fake_images, temp_fake_images), 0)
 
+                    x1, y1, x2, y2 = (real_images.size(3) * bbox[:,j,0]).int(), (real_images.size(2) * bbox[:,j,1]).int(), (real_images.size(3) * (bbox[:,j,2]+bbox[:,j,0])).int(), (real_images.size(2) * (bbox[:,j,3]+bbox[:,j,1])).int()  # [B, 1]
+                    x1, y1, x2, y2 = torch.minimum(torch.maximum(zeros, x1), x2-1), torch.minimum(torch.maximum(zeros, y1), y2-1), torch.minimum(torch.maximum(x1+1, x2), o_255), torch.minimum(torch.maximum(y1+1, y2), o_255)
                     for i in range(real_images.size(0)):
                         if epoch == args.start_epoch and not os.path.exists("{}/scene_graph/{}_sg_{:06d}_{:06d}_{:06d}.png".format(args.out_path, args.dataset, epoch, idx, i)):
                             img = vis.draw_scene_graph(label[i,:,0], triples[i], vocab)
@@ -207,29 +210,37 @@ def main(args):
 
                         image_batch = torch.cat((image_batch, torch.unsqueeze(real_images[i], 0)), 0)
                         torchvision.utils.save_image((image_batch+1.)/2., "{}/{}_grid_{:04d}_{:04d}_{:04d}_{:03d}.jpg".format(os.path.join(args.out_path, 'grid_samples/{:03d}_{}/'.format(label[i, j].item(), vocab['object_idx_to_name'][label[i, j].item()])), args.dataset, epoch, idx, i, j), value_range=(0., 1.))
-                        count[label[i, j].item()] = count[label[i, j].item()] + 1
                     metric_real_images = (real_images + 1.)/2.
-                    batch_real_images = metric_real_images.unsqueeze(0).repeat(model_count, 1, 1, 1, 1)  # [model_count, b, 3, h, w]
                     metric_fake_images = (fake_images + 1.)/2.
-
                     # metric check
+                    
                     for i in range(model_count):
                         for ii in range(real_images.size(0)):
-                            patch_hwhw = torch.round(torch.Tensor([bbox[ii,j,1], bbox[ii,j,1]+bbox[ii,j,3], bbox[ii,j,0], bbox[ii,j,0]+bbox[ii,j,2]]) * torch.Tensor([h, h, w, w])).type(torch.int)  # [4]
-                            patch_hwhw = torch.stack((
-                                patch_hwhw[0], torch.maximum(patch_hwhw[1], patch_hwhw[0]+1),
-                                patch_hwhw[2], torch.maximum(patch_hwhw[3], patch_hwhw[2]+1)
-                            ), 0)
-                            temp_real_patch = F.interpolate(batch_real_images[i,ii,:,patch_hwhw[0].item():patch_hwhw[1].item(),patch_hwhw[2].item():patch_hwhw[3].item()].unsqueeze(0), (h, w))
-                            temp_fake_patch = F.interpolate(metric_fake_images[i,ii,:,patch_hwhw[0].item():patch_hwhw[1].item(),patch_hwhw[2].item():patch_hwhw[3].item()].unsqueeze(0), (h, w))
-                            temp_test_l1 = torch.mean(torch.abs(temp_real_patch - temp_fake_patch))
-                            test_l1[i][label[ii,j].item()] = test_l1[i][label[ii,j].item()] + temp_test_l1
-                            test_l2[i][label[ii,j].item()] = test_l2[i][label[ii,j].item()] + torch.mean(torch.square(temp_real_patch-temp_fake_patch))  # [model_count]
-                            if (temp_test_l1 <= 0.05 * b and remain_ratio[i][label[ii,j].item()] > temp_remain_ratio):
-                                remain_ratio[i][label[ii,j].item()] = temp_remain_ratio
-                            test_ssim[i][label[ii,j].item()] = test_ssim[i][label[ii,j].item()] + ssim(temp_real_patch, temp_fake_patch)
-                            test_psnr[i][label[ii,j].item()] = test_psnr[i][label[ii,j].item()] + psnr(temp_real_patch, temp_fake_patch)
-                            test_lpips[i][label[ii,j].item()] = test_lpips[i][label[ii,j].item()] + lpips(temp_real_patch, temp_fake_patch)
+                            patch_real = metric_real_images[ii,:,y1[ii]:y2[ii],x1[ii]:x2[ii]].unsqueeze(0)
+                            patch_fake = metric_fake_images[i,ii,:,y1[ii]:y2[ii],x1[ii]:x2[ii]].unsqueeze(0)
+                            if patch_real.size(2) < 1 or patch_real.size(3) < 1:
+                                pass
+                            else:
+                                temp_real_patch = F.interpolate(patch_real, (h, w))
+                                temp_fake_patch = F.interpolate(patch_fake, (h, w))
+                                temp_test_l1 = torch.mean(torch.abs(temp_real_patch - temp_fake_patch))
+                                test_l1[i][label[ii,j].item()] = test_l1[i][label[ii,j].item()] + temp_test_l1
+                                test_l2[i][label[ii,j].item()] = test_l2[i][label[ii,j].item()] + torch.mean(torch.square(temp_real_patch-temp_fake_patch))  # [model_count]
+                                if (temp_test_l1 <= 0.05 * b and remain_ratio[i][label[ii,j].item()] > temp_remain_ratio):
+                                    remain_ratio[i][label[ii,j].item()] = temp_remain_ratio
+                                test_ssim[i][label[ii,j].item()] = test_ssim[i][label[ii,j].item()] + ssim(temp_real_patch, temp_fake_patch)
+                                test_psnr[i][label[ii,j].item()] = test_psnr[i][label[ii,j].item()] + psnr(temp_real_patch, temp_fake_patch)
+                                test_lpips[i][label[ii,j].item()] = test_lpips[i][label[ii,j].item()] + lpips(temp_real_patch, temp_fake_patch)
+                                if i == 0:
+                                    count[label[ii, j].item()] = count[label[ii, j].item()] + 1
+                                else:
+                                    pass
+                                if i == 0:
+                                    batch_fake_patch = temp_fake_patch
+                                elif i == model_count-1:
+                                    torchvision.save_image((torch.cat((patch_real, batch_fake_patch), 0)+1.)/2., "{}/{}_grid_patch_{:04d}_{:04d}_{:04d}_{:03d}.jpg".format(os.path.join(args.out_path, 'grid_samples/{:03d}_{}/'.format(label[i, j].item(), vocab['object_idx_to_name'][label[i, j].item()])), args.dataset, epoch, idx, i, j), value_range=(0., 1.))
+                                else:
+                                    batch_fake_patch = torch.cat((batch_fake_patch, temp_fake_patch), 0)
 
                     batch_count = batch_count + 1
                     '''
@@ -313,9 +324,15 @@ def main(args):
     for i in range(model_count):
         print('[ ** ] model name: {}'.format(args.model_name[i]))
         print('[*] mean mask ratio: {} %'.format(100. * mean_mask_ratio/(sum(count)+1.e-6)))
+        print('[*] count: {} \n'.format(sum(count)+1.e-6))
+        print('[*] l1: {} %'.format(100. * sum(test_l1[i])/(sum(count)+1.e-6)))
+        print('[*] l2: {} %'.format(100. * sum(test_l2[i])/(sum(count)+1.e-6)))
+        print('[*] ssim: {}'.format(sum(test_ssim[i])/(sum(count)+1.e-6)))
+        print('[*] psnr: {}'.format(sum(test_psnr[i])/(sum(count)+1.e-6)))
+        print('[*] lpips: {}'.format(sum(test_lpips[i])/(sum(count)+1.e-6)))
         for j in range(obj_len):
             print('================[{}]================'.format(vocab['object_idx_to_name'][j]))
-            print('[*] count: {} %\n'.format(count[j]+1.e-6))
+            print('[*] count: {} \n'.format(count[j]+1.e-6))
             print('[*] l1: {} %'.format(100. * test_l1[i][j]/(count[j]+1.e-6)))
             print('[*] l2: {} %'.format(100. * test_l2[i][j]/(count[j]+1.e-6)))
             print('[*] ssim: {}'.format(test_ssim[i][j]/(count[j]+1.e-6)))
@@ -326,10 +343,15 @@ def main(args):
     for i in range(model_count):
         f.write('=====================================================\n')
         f.write('[ ** ] model name: {} %\n'.format(args.model_name[i]))
-        f.write('[*] mean mask ratio: {} %\n'.format(100. * mean_mask_ratio/(count+1.e-6)))
+        f.write('[*] mean mask ratio: {} %\n'.format(100. * mean_mask_ratio/(sum(count)+1.e-6)))
+        f.write('[*] l1: {} %\n'.format(100. * sum(test_l1[i])/(sum(count)+1.e-6)))
+        f.write('[*] l2: {} %\n'.format(100. * sum(test_l2[i])/(sum(count)+1.e-6)))
+        f.write('[*] ssim: {}\n'.format(sum(test_ssim[i])/(sum(count)+1.e-6)))
+        f.write('[*] psnr: {}\n'.format(sum(test_psnr[i])/(sum(count)+1.e-6)))
+        f.write('[*] lpips: {}\n'.format(sum(test_lpips[i])/(sum(count)+1.e-6)))
         for j in range(obj_len):
             f.write('================[{}]================'.format(vocab['object_idx_to_name'][j]))
-            f.write('[*] count: {} %\n'.format(count[j]+1.e-6))
+            f.write('[*] count: {} \n'.format(count[j]+1.e-6))
             f.write('[*] l1: {} %\n'.format(100. * test_l1[i][j]/(count[j]+1.e-6)))
             f.write('[*] l2: {} %\n'.format(100. * test_l2[i][j]/(count[j]+1.e-6)))
             f.write('[*] ssim: {} \n'.format(test_ssim[i][j]/(count[j]+1.e-6)))

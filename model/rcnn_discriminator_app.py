@@ -302,7 +302,6 @@ class ResnetDiscriminator128_app(nn.Module):
         self.app_conv = ResBlock(ch * 8, ch * 8, downsample=False)
         self.l_y_app = nn.utils.spectral_norm(nn.Embedding(num_classes, ch * 8))
         self.app = nn.utils.spectral_norm(nn.Linear(ch * 16, 1))
-        self.sigmoid = nn.Sigmoid()
 
     def forward(self, x, y=None, bbox=None):
         features = []
@@ -377,7 +376,7 @@ class ResnetDiscriminator128_app(nn.Module):
 
         out_obj = out_obj + torch.sum(self.l_y(y).view(b, -1) * obj_feat.view(b, -1), dim=1, keepdim=True)
         features.append(out_obj)
-        return self.sigmoid(out_im), self.sigmoid(out_obj), self.sigmoid(out_app)
+        return out_im, out_obj, out_app
 
 
 
